@@ -1,6 +1,6 @@
 registry:
   enable: false
-  polaris-server-address: 127.0.0.1:8090
+  polaris-server-address: 127.0.0.1:8091
   name: polaris.limit
   namespace: Polaris
   health-check-enable: true
