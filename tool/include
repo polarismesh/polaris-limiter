@@ -1,0 +1,88 @@
+server_name="polaris-limit"
+cmdline="\./polaris-limit .\{0,2\}start"
+
+function log_date() {
+    echo $(date "+%Y-%m-%dT%H:%M:%S")
+}
+
+function log_error() {
+    echo -e "\033[31m\033[01m$(log_date)\terror\t$1 \033[0m"
+}
+
+function log_info() {
+    echo -e "\033[32m\033[01m$(log_date)\tinfo\t$1 \033[0m"
+}
+
+function del_file() {
+    log_info "del file for $server_name"
+
+    rm -rf ./log
+    rm -rf ./statis
+}
+
+function start() {
+    log_info "start $server_name"
+
+    if [ ! -d "./log" ]; then
+        mkdir ./log
+    fi
+
+    if [ ! -d "./statis" ]; then
+        mkdir ./statis
+    fi
+
+    ulimit -n 102400
+    nohup ./polaris-limit start >>./log/stdout 2>&1 &
+}
+
+function restart() {
+    log_info "restart $server_name"
+
+    if [ ! -d "./log" ]; then
+        mkdir ./log
+    fi
+
+    if [ ! -d "./statis" ]; then
+        mkdir ./statis
+    fi
+
+    ulimit -n 102400
+    nohup ./polaris-limit restart >>./log/stdout 2>&1 &
+}
+
+function stop() {
+    pids=$(ps -e -o pid,cmd | grep "$cmdline" | grep -v "grep" | awk '{print $1}')
+    array=($pids)
+    for pid in ${array[@]}; do
+        log_info "stop $server_name: pid=$pid"
+
+        kill -15 $pid
+    done
+}
+
+function add_cron() {
+    item="$workdir/tool/check.sh >>$workdir/log/check.log 2>&1"
+    exist=$(crontab -l | grep "$item" | grep -v "#" | wc -l)
+    if [ "$exist" == "0" ]; then
+        log_info "add cron for $server_name"
+
+        cron=$(mktemp)
+        crontab -l > $cron
+        echo "*/1 * * * * $item" >> $cron
+        crontab $cron
+        rm -f $cron
+    fi
+}
+
+function del_cron() {
+    item="$workdir/tool/check.sh >>$workdir/log/check.log 2>&1"
+    exist=$(crontab -l | grep "$item" | grep -v "#" | wc -l)
+    if [ "$exist" != "0" ]; then
+        log_info "del cron for $server_name"
+
+        cron=$(mktemp)
+        crontab -l | grep -v "$item" > $cron
+        crontab $cron
+        rm -f $cron
+    fi
+}

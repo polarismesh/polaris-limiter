@@ -1,0 +1,11 @@
+polaris-limit
+
+polaris-limit-release*.*
+
+*.swp
+*.code-workspace
+.idea
+
+.vscode
+
+*.log
