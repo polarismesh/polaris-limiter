@@ -23,8 +23,8 @@ import (
 	"net/http"
 
 	"github.com/emicklei/go-restful"
+
 	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/plugin"
 )
 
 // http server
@@ -33,21 +33,12 @@ type Server struct {
 	port    uint32
 	server  *http.Server
 	handler *restful.Container
-	// 插件
-	store plugin.Storage
 }
 
 // subInitialize
 func (h *Server) Initialize(option map[string]interface{}) error {
 	h.ip = option["ip"].(string)
 	h.port = uint32(option["port"].(int))
-
-	store, err := plugin.GetStorage()
-	if err != nil {
-		return err
-	}
-	h.store = store
-
 	return nil
 }
 
