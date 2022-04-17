@@ -24,8 +24,8 @@ import (
 	"strings"
 	"time"
 
-	clientAPI "git.code.oa.com/polaris/polaris-go/api"
-	clientConfig "git.code.oa.com/polaris/polaris-go/pkg/config"
+	clientAPI "github.com/polarismesh/polaris-go/api"
+	clientConfig "github.com/polarismesh/polaris-go/pkg/config"
 	"github.com/polarismesh/polaris-limit/apiserver"
 	"github.com/polarismesh/polaris-limit/pkg/log"
 	"github.com/polarismesh/polaris-limit/pkg/version"
@@ -47,7 +47,7 @@ func initPolarisClient(registryCfg *Registry) (err error) {
 	if len(serverAddress) > 0 {
 		cfg = clientConfig.NewDefaultConfiguration([]string{serverAddress})
 	} else {
-		cfg = clientConfig.NewDefaultConfigurationWithDomain()
+		return fmt.Errorf("polaris server address is required")
 	}
 	cfg.GetGlobal().GetStatReporter().SetEnable(false)
 	cfg.GetGlobal().GetAPI().SetMaxRetryTimes(1)
