@@ -45,7 +45,6 @@ go build -o ${bin_name} -ldflags="-X ${package}.Version=${version} -X ${package}
 mkdir -p ${folder_name}
 cp ${bin_name} ${folder_name}
 cp polaris-limit.yaml ${folder_name}
-cp polaris.yaml ${folder_name}
 cp -r tool ${folder_name}/
 zip -r "${pkg_name}" ${folder_name}
 #md5sum ${pkg_name} > "${pkg_name}.md5sum"
