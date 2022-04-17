@@ -1,0 +1,50 @@
+api-servers:
+  - name: http
+    option:
+      ip: 0.0.0.0
+      port: 8100
+  - name: grpc
+    option:
+      ip: 0.0.0.0
+      port: 8101
+limit:
+  myid: 10
+  max-counter: 1000
+  max-client: 100
+  push-worker: 4
+  slide-count: 1
+  counter-group: 64 # 计数器分组，不同组的计数器创建时不冲突
+  purge-counter-interval: 1s
+  sync-remote-storage-interval: 1s
+  async-remote-wait-timeout: 200ms
+  update-remote-storage-threshold: 1m
+  flush-local-storage-threshold: 3s
+plugin:
+  statis:
+    name: file
+    option:
+      ratelimit-app-name: 294_4423_polaris-limit-stat #限流监控
+      ratelimit_report_log_path: log/polaris-limit-ratelimit-report.log
+      ratelimit_precision_log_path: log/polaris-limit-stat.log
+      ratelimit_event_log_path: log/polaris-limit-event.log
+      server-app-name: 294_11866_polaris_limit_server #服务端监控
+      server_report_log_path: log/polaris-limit-server-report.log
+      log_interval: 1
+      precision_log_interval: 1
+#  storage:
+#    name: redis
+#    option:
+#      address: 9.134.15.118:6379 #9.146.200.36:6379
+#      max-connections: 1
+#      idle-connection-timeout: 5m
+#      async-timeout: 200ms
+#      expire-seconds: 259200 # 72小时
+#      max-wait-queue: 20480
+#      max-pipeline: 1
+#      pipeline-interval: 16ms
+logger:
+  RotateOutputPath: log/polaris-limit.log
+  RotationMaxSize: 500
+  RotationMaxAge: 30
+  RotationMaxBackups: 100
+  level: debug
