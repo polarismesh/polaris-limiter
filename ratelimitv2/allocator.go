@@ -17,7 +17,7 @@
 
 package ratelimitv2
 
-import apiv2 "github.com/polarismesh/polaris-limit/api/v2"
+import apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 
 //请求分配器
 type QuotaAllocator interface {

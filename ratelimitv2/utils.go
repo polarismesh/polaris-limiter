@@ -20,8 +20,8 @@ package ratelimitv2
 import (
 	"time"
 
-	apiv2 "github.com/polarismesh/polaris-limit/api/v2"
-	"github.com/polarismesh/polaris-limit/pkg/config"
+	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+	"github.com/polarismesh/polaris-limiter/pkg/config"
 )
 
 //默认滑窗数量

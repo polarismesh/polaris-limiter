@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package v1;
+
+import "service.proto";
+import "response.proto";
+
+service PolarisGRPC {
+
+	// 被调方注册服务实例
+	rpc RegisterInstance(Instance) returns(Response) {}
+	// 被调方反注册服务实例
+	rpc DeregisterInstance(Instance) returns(Response) {}
+
+	// 被调方上报心跳
+	rpc Heartbeat(Instance) returns(Response) {}
+}

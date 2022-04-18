@@ -18,13 +18,14 @@
 package ratelimitv2
 
 import (
-	apiv2 "github.com/polarismesh/polaris-limit/api/v2"
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
-	"github.com/polarismesh/polaris-limit/plugin"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
+	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
 //默认为批量抢占模式

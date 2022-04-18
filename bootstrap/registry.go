@@ -22,147 +22,207 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	clientAPI "github.com/polarismesh/polaris-go/api"
-	clientConfig "github.com/polarismesh/polaris-go/pkg/config"
-	"github.com/polarismesh/polaris-limit/apiserver"
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/pkg/version"
+	"google.golang.org/grpc/metadata"
+
+	"github.com/golang/protobuf/ptypes/wrappers"
+
+	"google.golang.org/grpc"
+
+	"github.com/polarismesh/polaris-limiter/apiserver"
+	polaris "github.com/polarismesh/polaris-limiter/pkg/api/polaris/v1"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/version"
 )
 
 //心跳上报周期
-const serverTtl = 2 * time.Second
+const (
+	serverTtl = 5 * time.Second
+	// 需要发往服务端的请求跟踪标识
+	headerRequestID = "request-id"
+
+	timeout = 1 * time.Second
+)
+
+var rid uint64
 
 var (
-	clientSDK            clientAPI.ProviderAPI
-	heartBeatRequestChan chan *clientAPI.InstanceHeartbeatRequest
-	selfServiceInstances = make([]*clientAPI.InstanceDeRegisterRequest, 0)
+	registerInstances []*polaris.Instance
+
+	polarisServerAddress string
+	polarisToken         string
 )
 
 //初始化客户端SDK
 func initPolarisClient(registryCfg *Registry) (err error) {
-	var cfg clientConfig.Configuration
-	serverAddress := registryCfg.PolarisServerAddress
-	if len(serverAddress) > 0 {
-		cfg = clientConfig.NewDefaultConfiguration([]string{serverAddress})
-	} else {
+	polarisServerAddress = registryCfg.PolarisServerAddress
+	polarisToken = registryCfg.Token
+	if len(polarisServerAddress) == 0 {
 		return fmt.Errorf("polaris server address is required")
 	}
-	cfg.GetGlobal().GetStatReporter().SetEnable(false)
-	cfg.GetGlobal().GetAPI().SetMaxRetryTimes(1)
-	cfg.GetConsumer().GetLocalCache().SetPersistDir("./polaris/backup")
-	clientSDK, err = clientAPI.NewProviderAPIByConfig(cfg)
-	return
+	return nil
 }
 
 //启动心跳上报
 func startHeartbeat(ctx context.Context) {
-	heartBeatRequestChan = make(chan *clientAPI.InstanceHeartbeatRequest)
 	go func() {
 		ticker := time.NewTicker(serverTtl)
 		defer ticker.Stop()
-		var heartBeatRequests []*clientAPI.InstanceHeartbeatRequest
 		for {
 			select {
 			case <-ctx.Done():
 				log.Infof("[Bootstrap] heartbeat routine stopped")
 				return
 			case <-ticker.C:
-				if len(heartBeatRequests) == 0 {
+				if len(registerInstances) == 0 {
 					continue
 				}
-				for _, req := range heartBeatRequests {
-					err := clientSDK.Heartbeat(req)
-					if nil != err {
-						log.Errorf("[Bootstrap] fail to send heatBeat, err is %v", err)
+				_ = doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
+					for _, instance := range registerInstances {
+						heartbeat := func() error {
+							reqId := fmt.Sprintf(
+								"%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
+							clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
+							defer cancel()
+							_, err := client.Heartbeat(clientCtx, instance)
+							if nil != err {
+								log.Errorf("[Bootstrap] fail to send heatBeat, err is %v", err)
+							}
+							return err
+						}
+						if err := heartbeat(); nil != err {
+							return err
+						}
 					}
-				}
-			case req := <-heartBeatRequestChan:
-				heartBeatRequests = append(heartBeatRequests, req)
+					return nil
+				})
 			}
 		}
 	}()
 }
 
+func doWithPolarisClient(handle func(polaris.PolarisGRPCClient) error) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	conn, err := grpc.DialContext(ctx, polarisServerAddress, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	client := polaris.NewPolarisGRPCClient(conn)
+	return handle(client)
+}
+
 //创建服务注册请求
-func buildRegisterRequest(
-	cfg *Registry, server apiserver.APIServer, serverAddress string, restart bool) *clientAPI.InstanceRegisterRequest {
-	request := &clientAPI.InstanceRegisterRequest{}
-	request.Namespace = cfg.Namespace
-	request.Service = cfg.Name
-	request.Port = int(server.GetPort())
-	request.Host = serverAddress
-	request.ServiceToken = cfg.Token
-	protocol := server.GetProtocol()
-	request.Protocol = &protocol
-	request.Version = &version.Version
-	request.Metadata = map[string]string{"build-revision": version.GetRevision()}
+func buildRegisterRequest(cfg *Registry, server apiserver.APIServer, serverAddress string) *polaris.Instance {
+	instance := &polaris.Instance{}
+	instance.Namespace = &wrappers.StringValue{Value: cfg.Namespace}
+	instance.Service = &wrappers.StringValue{Value: cfg.Name}
+	instance.Host = &wrappers.StringValue{Value: serverAddress}
+	instance.Port = &wrappers.UInt32Value{Value: server.GetPort()}
+	instance.ServiceToken = &wrappers.StringValue{Value: polarisToken}
+	instance.Protocol = &wrappers.StringValue{Value: server.GetProtocol()}
+	instance.Version = &wrappers.StringValue{Value: version.Version}
+	instance.Metadata = map[string]string{"build-revision": version.GetRevision()}
 	if cfg.HealthCheckEnable { // 开启健康检查
-		request.SetTTL(int(serverTtl / time.Second))
+		instance.EnableHealthCheck = &wrappers.BoolValue{Value: true}
+		instance.HealthCheck = &polaris.HealthCheck{
+			Type: polaris.HealthCheck_HEARTBEAT,
+			Heartbeat: &polaris.HeartbeatHealthCheck{
+				Ttl: &wrappers.UInt32Value{Value: uint32(serverTtl / time.Second)}}}
 	}
-	if !restart {
-		request.SetIsolate(true)
+	return instance
+}
+
+// 创建传输grpc头的valueContext
+func CreateHeaderContextWithReqId(timeout time.Duration, reqID string) (context.Context, context.CancelFunc) {
+	md := metadata.New(map[string]string{headerRequestID: reqID})
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	} else {
+		ctx = context.Background()
+		cancel = nil
 	}
-	return request
+	return metadata.NewOutgoingContext(ctx, md), cancel
 }
 
 // 注册限流Server
-func selfRegister(cfg *Registry, servers []apiserver.APIServer, serverAddress string, restart bool) error {
+func selfRegister(cfg *Registry, servers []apiserver.APIServer, serverAddress string) error {
 	// 开始对每个监听端口的服务进行注册
+	var instances = make([]*polaris.Instance, 0, len(servers))
 	for _, server := range servers {
-		req := buildRegisterRequest(cfg, server, serverAddress, restart)
-		resp, err := clientSDK.Register(req)
-		if nil != err {
-			log.Errorf("[Bootstrap] fail to register instance, err: %s", err.Error())
-			return err
-		}
-		log.Infof(
-			"[Bootstrap] instance %d:%s registered, id %s", serverAddress, server.GetPort(), resp.InstanceID)
-		deregisterReq := &clientAPI.InstanceDeRegisterRequest{}
-		deregisterReq.Namespace = req.Namespace
-		deregisterReq.Service = req.Service
-		deregisterReq.Host = req.Host
-		deregisterReq.Port = req.Port
-		deregisterReq.ServiceToken = cfg.Token
-		if resp.Existed {
-			log.Infof("[Bootstrap] instance %s:%d exists, start to deregister", serverAddress, server.GetPort())
-			//已经存在，则反注册
-			if err = clientSDK.Deregister(deregisterReq); nil != err {
-				log.Errorf("[Bootstrap] fail to deregister instance, err: %s", err.Error())
-				return err
-			}
-			log.Infof("[Bootstrap] start to re-register instance %s:%d, ", serverAddress, server.GetPort())
-			resp, err = clientSDK.Register(req)
-			if nil != err {
-				log.Errorf("[Bootstrap] fail to re-register instance, err: %s", err.Error())
-				return err
-			}
-		}
-		selfServiceInstances = append(selfServiceInstances, deregisterReq)
-		if cfg.HealthCheckEnable {
-			healthCheckReq := &clientAPI.InstanceHeartbeatRequest{}
-			healthCheckReq.InstanceID = resp.InstanceID
-			healthCheckReq.ServiceToken = cfg.Token
-			heartBeatRequestChan <- healthCheckReq
-		}
+		instance := buildRegisterRequest(cfg, server, serverAddress)
+		instances = append(instances, instance)
 	}
+	var heartbeatInstances = make([]*polaris.Instance, 0, len(servers))
+	err := doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
+		for _, instance := range instances {
+			register := func() error {
+				reqId := fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
+				clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
+				defer cancel()
+				resp, err := client.RegisterInstance(clientCtx, instance)
+				if nil != err {
+					log.Infof("[Bootstrap] fail to register instance %d:%s, err: %s",
+						instance.GetHost().GetValue(), instance.GetPort().GetValue(), err)
+					return err
+				}
+				log.Infof("[Bootstrap] instance %s:%d registered, code %d",
+					instance.GetHost().GetValue(), instance.GetPort().GetValue(), resp.GetCode().GetValue())
+				hbInstance := &polaris.Instance{
+					Id:           &wrappers.StringValue{Value: resp.GetInstance().GetId().GetValue()},
+					Namespace:    instance.GetNamespace(),
+					Service:      instance.GetService(),
+					Host:         instance.GetHost(),
+					Port:         instance.GetPort(),
+					ServiceToken: instance.GetServiceToken(),
+				}
+				heartbeatInstances = append(heartbeatInstances, hbInstance)
+				return nil
+			}
+			err := register()
+			if nil != err {
+				return nil
+			}
+		}
+		return nil
+	})
+	if nil != err {
+		return err
+	}
+	registerInstances = heartbeatInstances
 	return nil
 }
 
 // 反注册
 func selfDeregister() error {
-	if len(selfServiceInstances) == 0 {
+	if len(registerInstances) == 0 {
 		return nil
 	}
-	var err error
-	for _, instance := range selfServiceInstances {
-		err = clientSDK.Deregister(instance)
-		if err != nil {
-			log.Errorf("[Bootstrap] fail to deregister instance err: %s", err.Error())
+	return doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
+		for _, instance := range registerInstances {
+			deregister := func() error {
+				reqId := fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
+				clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
+				defer cancel()
+				resp, err := client.DeregisterInstance(clientCtx, instance)
+				if err != nil {
+					log.Errorf("[Bootstrap] fail to deregister instance err: %s", err.Error())
+					return err
+				}
+				log.Infof("[Bootstrap] success to deregister instance %s:%d, code %d",
+					instance.GetHost().GetValue(), instance.GetPort().GetValue(), resp.GetCode().GetValue())
+				return nil
+			}
+			_ = deregister()
 		}
-	}
-	return err
+		return nil
+	})
 }
 
 // 获取本地IP地址

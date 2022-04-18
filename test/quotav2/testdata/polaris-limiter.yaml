@@ -23,12 +23,12 @@ plugin:
   statis:
     name: file
     option:
-      ratelimit-app-name: 294_4423_polaris-limit-stat #限流监控
-      ratelimit_report_log_path: log/polaris-limit-ratelimit-report.log
-      ratelimit_precision_log_path: log/polaris-limit-stat.log
-      ratelimit_event_log_path: log/polaris-limit-event.log
+      ratelimit-app-name: 294_4423_polaris-limiter-stat #限流监控
+      ratelimit_report_log_path: log/polaris-limiter-ratelimit-report.log
+      ratelimit_precision_log_path: log/polaris-limiter-stat.log
+      ratelimit_event_log_path: log/polaris-limiter-event.log
       server-app-name: 294_11866_polaris_limit_server #服务端监控
-      server_report_log_path: log/polaris-limit-server-report.log
+      server_report_log_path: log/polaris-limiter-server-report.log
       log_interval: 1
       precision_log_interval: 1
 #  storage:
@@ -43,7 +43,7 @@ plugin:
 #      max-pipeline: 1
 #      pipeline-interval: 16ms
 logger:
-  RotateOutputPath: log/polaris-limit.log
+  RotateOutputPath: log/polaris-limiter.log
   RotationMaxSize: 500
   RotationMaxAge: 30
   RotationMaxBackups: 100

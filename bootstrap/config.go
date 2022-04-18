@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/polarismesh/polaris-limit/apiserver"
-	"github.com/polarismesh/polaris-limit/pkg/config"
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/plugin"
+	"github.com/polarismesh/polaris-limiter/apiserver"
+	"github.com/polarismesh/polaris-limiter/pkg/config"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/plugin"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -43,6 +43,7 @@ type Registry struct {
 	PolarisServerAddress string `yaml:"polaris-server-address"`
 	Name                 string `yaml:"name"`
 	Namespace            string `yaml:"namespace"`
+	Host                 string `yaml:"host"`
 	Token                string `yaml:"token"`
 	HealthCheckEnable    bool   `yaml:"health-check-enable"`
 }

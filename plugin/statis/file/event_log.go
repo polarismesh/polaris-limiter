@@ -18,8 +18,8 @@
 package file
 
 import (
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/plugin"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/plugin"
 	"go.uber.org/zap"
 	"sync"
 )

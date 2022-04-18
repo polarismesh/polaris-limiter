@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ $# != 4 ]; then
-    echo "e.g.: bash $0 polaris_mesh/polaris-limit v1.0 docker_username docekr_user_password"
+    echo "e.g.: bash $0 polaris_mesh/polaris-limiter v1.0 docker_username docker_user_password"
     exit 1
 fi
 
@@ -15,7 +15,7 @@ echo "docker repository : ${docker_repository}, tag : ${docker_tag}"
 bash build.sh
 
 if [ $? != 0 ]; then
-    echo "build polaris-limit failed"
+    echo "build polaris-limiter failed"
     exit 1
 fi
 

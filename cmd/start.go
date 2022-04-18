@@ -19,7 +19,7 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/polarismesh/polaris-limit/bootstrap"
+	"github.com/polarismesh/polaris-limiter/bootstrap"
 	"github.com/spf13/cobra"
 	//"log"
 	//"os"
@@ -52,5 +52,5 @@ var (
  * @brief 解析命令参数
  */
 func init() {
-	startCmd.PersistentFlags().StringVarP(&configFilePath, "config", "c", "polaris-limit.yaml", "config file path")
+	startCmd.PersistentFlags().StringVarP(&configFilePath, "config", "c", "polaris-limiter.yaml", "config file path")
 }

@@ -24,7 +24,7 @@ import (
 
 	"github.com/emicklei/go-restful"
 
-	"github.com/polarismesh/polaris-limit/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
 )
 
 // http server

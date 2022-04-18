@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package v1;
+
+import "google/protobuf/wrappers.proto";
+import "service.proto";
+
+message SimpleResponse {
+	google.protobuf.UInt32Value code = 1;
+	google.protobuf.StringValue info = 2;
+}
+
+message Response {
+	google.protobuf.UInt32Value code = 1;
+	google.protobuf.StringValue info = 2;
+	reserved 3;
+	Namespace namespace = 4;
+	Service service = 5;
+	Instance instance = 6;
+	reserved 7 to 27;
+}

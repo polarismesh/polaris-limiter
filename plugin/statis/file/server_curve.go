@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
-	"github.com/polarismesh/polaris-limit/plugin"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
+	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
 //限流曲线上报

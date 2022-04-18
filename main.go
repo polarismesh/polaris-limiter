@@ -18,7 +18,7 @@
 package main
 
 import (
-	"github.com/polarismesh/polaris-limit/cmd"
+	"github.com/polarismesh/polaris-limiter/cmd"
 )
 
 /**

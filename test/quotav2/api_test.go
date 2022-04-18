@@ -20,13 +20,6 @@ package quotav2
 import (
 	"context"
 	"fmt"
-	"github.com/polarismesh/polaris-limit/api/common"
-	apiv2 "github.com/polarismesh/polaris-limit/api/v2"
-	_ "github.com/polarismesh/polaris-limit/apiserver/grpc"
-	_ "github.com/polarismesh/polaris-limit/apiserver/http"
-	"github.com/polarismesh/polaris-limit/bootstrap"
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	_ "github.com/polarismesh/polaris-limit/plugin/statis/file"
 	"github.com/google/uuid"
 	. "github.com/smartystreets/goconvey/convey"
 	"google.golang.org/grpc"
@@ -36,6 +29,14 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	_ "github.com/polarismesh/polaris-limiter/apiserver/grpc"
+	_ "github.com/polarismesh/polaris-limiter/apiserver/http"
+	"github.com/polarismesh/polaris-limiter/bootstrap"
+	"github.com/polarismesh/polaris-limiter/pkg/api/base"
+	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	_ "github.com/polarismesh/polaris-limiter/plugin/statis/file"
 )
 
 // 初始化
@@ -48,7 +49,7 @@ func init() {
 	options.SetStackTraceLevel(log.DefaultScopeName, "none")
 	options.SetLogCallers(log.DefaultScopeName, true)
 	_ = log.Configure(options)
-	bootstrap.NonBlockingStart("testdata/polaris-limit.yaml", false)
+	bootstrap.NonBlockingStart("testdata/polaris-limiter.yaml", false)
 }
 
 const (
@@ -366,7 +367,7 @@ func testRateLimitInOneThread(idx int, wg *sync.WaitGroup, t *testing.T,
 	defer wg.Done()
 	Convey(fmt.Sprintf("测试客户端%d上报查询", idx), t, func() {
 		client := apiv2.NewRateLimitGRPCV2Client(conn)
-		md := metadata.New(map[string]string{common.HeaderKeyClientIP: fmt.Sprintf(IpPattern, 11)})
+		md := metadata.New(map[string]string{base.HeaderKeyClientIP: fmt.Sprintf(IpPattern, 11)})
 		stream, err := client.Service(metadata.NewOutgoingContext(context.Background(), md))
 		So(err, ShouldBeNil)
 		initReq := buildInitRequestWitDuration(svcName, multiNamespace, multiMethodName,

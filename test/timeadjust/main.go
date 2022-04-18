@@ -21,12 +21,13 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	apiv2 "github.com/polarismesh/polaris-limit/api/v2"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
 	"google.golang.org/grpc"
 	"log"
 	"math"
 	"time"
+
+	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
 var (

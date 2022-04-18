@@ -18,7 +18,7 @@
 package v2
 
 import (
-	"github.com/polarismesh/polaris-limit/pkg/utils"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
 //带上精准时间戳的上报消息

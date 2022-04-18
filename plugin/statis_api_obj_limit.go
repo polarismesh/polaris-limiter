@@ -18,7 +18,7 @@
 package plugin
 
 import (
-	"github.com/polarismesh/polaris-limit/pkg/utils"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/modern-go/reflect2"
 	"sync"

@@ -19,7 +19,7 @@ package ratelimitv2
 
 import (
 	"encoding/json"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
 const (

@@ -18,7 +18,7 @@
 package v2
 
 import (
-	"github.com/polarismesh/polaris-limit/plugin"
+	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
 type Code uint32

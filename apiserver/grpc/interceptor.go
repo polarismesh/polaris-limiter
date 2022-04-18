@@ -23,19 +23,20 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
-	"github.com/polarismesh/polaris-limit/api/common"
-	apiv2 "github.com/polarismesh/polaris-limit/api/v2"
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+
+	"github.com/polarismesh/polaris-limiter/pkg/api/base"
+	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
 //不需要走拦截器的同步方法
 var unaryMethodsNoInterceptor = map[string]bool{
-	"/polaris.limit.v2.RateLimitGRPCV2/TimeAdjust": true,
+	"/polaris.limiter.v2.RateLimitGRPCV2/TimeAdjust": true,
 }
 
 // grpc unary拦截器函数
@@ -180,7 +181,7 @@ func parseContext(ctx context.Context) context.Context {
 		if len(ids) > 0 {
 			requestID = ids[0]
 		}
-		ips := meta[common.HeaderKeyClientIP]
+		ips := meta[base.HeaderKeyClientIP]
 		if len(ips) > 0 {
 			clientIP = ips[0]
 		}

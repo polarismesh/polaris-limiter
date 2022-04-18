@@ -37,7 +37,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          DOCKER_REPOSITORY: polarismesh/polaris-limit
+          DOCKER_REPOSITORY: polarismesh/polaris-limiter
           DOCKER_TAG: ${{ github.event.inputs.polaris_tag }}
           DOCKER_USER: ${{ github.event.inputs.docker_username }}
           DOCKER_PASS: ${{ github.event.inputs.docker_password }}
