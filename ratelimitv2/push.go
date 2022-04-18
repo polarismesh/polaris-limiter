@@ -20,7 +20,8 @@ package ratelimitv2
 import (
 	"context"
 	"errors"
-	apiv2 "github.com/polarismesh/polaris-limit/api/v2"
+
+	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 )
 
 //推送管理器

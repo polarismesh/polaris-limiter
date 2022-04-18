@@ -15,7 +15,7 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package common
+package base
 
 const (
 	//与limit server通信的流，可以带入客户端真实IP，获取到真实IP，则以真实IP为准，否则取TCP连接的IP

@@ -42,7 +42,7 @@ jobs:
         run: |
           echo "version is $VERSION"
           bash build.sh $VERSION
-          PACKAGE_NAME=$(ls | grep polaris-limit-release*.zip | sed -n '1p')
+          PACKAGE_NAME=$(ls | grep polaris-limiter-release*.zip | sed -n '1p')
           echo ::set-output name=name::${PACKAGE_NAME}
 
       - name: Upload asset

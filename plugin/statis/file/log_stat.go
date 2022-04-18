@@ -20,9 +20,9 @@ package file
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
-	"github.com/polarismesh/polaris-limit/plugin"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
+	"github.com/polarismesh/polaris-limiter/plugin"
 	"github.com/modern-go/reflect2"
 	"github.com/natefinch/lumberjack"
 	"go.uber.org/zap"

@@ -19,7 +19,7 @@ package config
 
 import (
 	"fmt"
-	"github.com/polarismesh/polaris-limit/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"math"
 	"time"
 )

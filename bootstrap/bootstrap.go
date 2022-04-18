@@ -24,11 +24,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/polarismesh/polaris-limit/apiserver"
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
-	"github.com/polarismesh/polaris-limit/plugin"
-	"github.com/polarismesh/polaris-limit/ratelimitv2"
+	"github.com/polarismesh/polaris-limiter/apiserver"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
+	"github.com/polarismesh/polaris-limiter/plugin"
+	"github.com/polarismesh/polaris-limiter/ratelimitv2"
 )
 
 // bootstrap退出的封装
@@ -73,7 +73,9 @@ func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, c
 	// ratelimit core server 初始化
 	ctx, cancel := context.WithCancel(context.Background())
 
-	if len(config.Registry.PolarisServerAddress) > 0 {
+	if len(config.Registry.Host) > 0 {
+		utils.ServerAddress = config.Registry.Host
+	} else if len(config.Registry.PolarisServerAddress) > 0 {
 		serverAddr, err := GetLocalHost(config.Registry.PolarisServerAddress)
 		if err != nil {
 			bootExit(fmt.Sprintf("[Bootstrap] get local host err: %s", err.Error()))
@@ -98,12 +100,12 @@ func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, c
 		if err = initPolarisClient(registryCfg); nil != err {
 			bootExit(fmt.Sprintf("fail to init polaris sdk, err: %s", err.Error()))
 		}
+		// 服务注册
+		if err := selfRegister(registryCfg, servers, utils.ServerAddress); err != nil {
+			bootExit(fmt.Sprintf("service registry err: %s", err.Error()))
+		}
 		if registryCfg.HealthCheckEnable { //启动心跳上报
 			startHeartbeat(ctx)
-		}
-		// 服务注册
-		if err := selfRegister(registryCfg, servers, utils.ServerAddress, restart); err != nil {
-			bootExit(fmt.Sprintf("service registry err: %s", err.Error()))
 		}
 	} else {
 		log.Info("[Bootstrap] not enable register the ratelimit server")

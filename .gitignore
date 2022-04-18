@@ -1,6 +1,6 @@
-polaris-limit
+polaris-limiter
 
-polaris-limit-release*.*
+polaris-limiter-release*.*
 
 *.swp
 *.code-workspace

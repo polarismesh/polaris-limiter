@@ -17,7 +17,7 @@
 
 package http
 
-import "github.com/polarismesh/polaris-limit/apiserver"
+import "github.com/polarismesh/polaris-limiter/apiserver"
 
 // 自动初始化，注册server
 func init() {

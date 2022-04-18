@@ -1,5 +1,5 @@
-server_name="polaris-limit"
-cmdline="\./polaris-limit .\{0,2\}start"
+server_name="polaris-limiter"
+cmdline="\./polaris-limiter .\{0,2\}start"
 
 function log_date() {
     echo $(date "+%Y-%m-%dT%H:%M:%S")
@@ -32,7 +32,7 @@ function start() {
     fi
 
     ulimit -n 102400
-    nohup ./polaris-limit start >>./log/stdout 2>&1 &
+    nohup ./polaris-limiter start >>./log/stdout 2>&1 &
 }
 
 function restart() {
@@ -47,7 +47,7 @@ function restart() {
     fi
 
     ulimit -n 102400
-    nohup ./polaris-limit restart >>./log/stdout 2>&1 &
+    nohup ./polaris-limiter restart >>./log/stdout 2>&1 &
 }
 
 function stop() {

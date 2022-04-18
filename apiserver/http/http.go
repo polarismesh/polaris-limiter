@@ -26,9 +26,9 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 
-	api "github.com/polarismesh/polaris-limit/api/v2"
-	"github.com/polarismesh/polaris-limit/pkg/log"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
+	api "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
 // http请求封装器

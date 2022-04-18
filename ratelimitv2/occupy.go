@@ -18,9 +18,10 @@
 package ratelimitv2
 
 import (
-	apiv2 "github.com/polarismesh/polaris-limit/api/v2"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
 	"sync/atomic"
+
+	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
 //抢占式分配器

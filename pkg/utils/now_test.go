@@ -49,13 +49,13 @@ func BenchmarkTimeNow(b *testing.B) {
 
 /**
 linux下的性能测试结果
-[sam@VM_15_118_centos ~/polaris-limit/pkg/utils]$ go test -mod=vendor -bench=.
+[sam@VM_15_118_centos ~/polaris-limiter/pkg/utils]$ go test -mod=vendor -bench=.
 now is 2021-03-26T16:34:03.220+0800
 goos: linux
 goarch: amd64
-pkg: github.com/polarismesh/polaris-limit/pkg/utils
+pkg: github.com/polarismesh/polaris-limiter/pkg/utils
 BenchmarkCurrentMicrosecond-8           16930384                71.1 ns/op             0 B/op          0 allocs/op
 BenchmarkTimeNow-8                       8023588               149 ns/op               0 B/op          0 allocs/op
 PASS
-ok      github.com/polarismesh/polaris-limit/pkg/utils        2.630s
+ok      github.com/polarismesh/polaris-limiter/pkg/utils        2.630s
 */

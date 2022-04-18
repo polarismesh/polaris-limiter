@@ -27,9 +27,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	apiv2 "github.com/polarismesh/polaris-limit/api/v2"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+
+	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 )
 
 var (

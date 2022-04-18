@@ -20,8 +20,8 @@ package ratelimitv2
 import (
 	"context"
 	"errors"
-	"github.com/polarismesh/polaris-limit/pkg/config"
-	"github.com/polarismesh/polaris-limit/plugin"
+	"github.com/polarismesh/polaris-limiter/pkg/config"
+	"github.com/polarismesh/polaris-limiter/plugin"
 	"sync"
 )
 

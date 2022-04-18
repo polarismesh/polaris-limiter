@@ -18,7 +18,7 @@
 package echo
 
 import (
-	"github.com/polarismesh/polaris-limit/plugin"
+	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
 // 插件注册

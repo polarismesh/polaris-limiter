@@ -19,4 +19,4 @@ ${PROTOC}/bin/protoc \
 --go_out=plugins=grpc:. \
 --proto_path=${PROTOC}/include \
 --proto_path=. \
-ratelimit_v2.proto grpcapi_v2.proto
+ratelimit_v2.proto grpcapi_ratelimit_v2.proto

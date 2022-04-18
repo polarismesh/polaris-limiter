@@ -11,17 +11,17 @@ else
   version="$currentTimeStamp"
 fi
 workdir=$(dirname $(realpath $0))
-bin_name="polaris-limit"
+bin_name="polaris-limiter"
 if [ "${GOOS}" == "" ]; then
   GOOS=$(go env GOOS)
 fi
 if [ "${GOARCH}" == "" ]; then
   GOARCH=$(go env GOARCH)
 fi
-folder_name="polaris-limit-release_${version}.${GOOS}.${GOARCH}"
+folder_name="polaris-limiter-release_${version}.${GOOS}.${GOARCH}"
 pkg_name="${folder_name}.zip"
 if [ "${GOOS}" == "windows" ]; then
-  bin_name="polaris-limit.exe"
+  bin_name="polaris-limiter.exe"
 fi
 echo "GOOS is ${GOOS}, binary name is ${bin_name}"
 
@@ -38,13 +38,13 @@ rm -f ${bin_name}
 export CGO_ENABLED=0
 
 build_date=$(date "+%Y%m%d.%H%M%S")
-package="github.com/polarismesh/polaris-limit/version"
+package="github.com/polarismesh/polaris-limiter/pkg/version"
 go build -o ${bin_name} -ldflags="-X ${package}.Version=${version} -X ${package}.BuildDate=${build_date}"
 
 # 打包
 mkdir -p ${folder_name}
 cp ${bin_name} ${folder_name}
-cp polaris-limit.yaml ${folder_name}
+cp polaris-limiter.yaml ${folder_name}
 cp -r tool ${folder_name}/
 zip -r "${pkg_name}" ${folder_name}
 #md5sum ${pkg_name} > "${pkg_name}.md5sum"

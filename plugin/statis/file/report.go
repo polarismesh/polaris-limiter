@@ -19,7 +19,7 @@ package file
 
 import (
 	"fmt"
-	"github.com/polarismesh/polaris-limit/pkg/utils"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
 	"github.com/natefinch/lumberjack"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"

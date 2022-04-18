@@ -17,7 +17,7 @@
 
 package grpc
 
-import "github.com/polarismesh/polaris-limit/apiserver"
+import "github.com/polarismesh/polaris-limiter/apiserver"
 
 // 初始化
 func init() {
