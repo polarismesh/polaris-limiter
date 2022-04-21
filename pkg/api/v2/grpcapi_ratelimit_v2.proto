@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package polaris.limiter.v2;
+package polaris.metric.v2;
 
 option go_package = "v2";
 

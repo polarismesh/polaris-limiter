@@ -1,7 +1,7 @@
 registry:
   enable: true
   polaris-server-address: 127.0.0.1:8091
-  name: polaris.limit
+  name: polaris.limiter
   namespace: Polaris
   health-check-enable: true
 api-servers:
