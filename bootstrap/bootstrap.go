@@ -37,7 +37,7 @@ func bootExit(msg string) {
 	os.Exit(-1)
 }
 
-// Server启动入口
+// Start Server启动入口
 // 引导启动阶段，遇到错误，直接退出
 func Start(configPath string, restart bool) {
 	servers, errCh, cancel := NonBlockingStart(configPath, restart)
@@ -49,7 +49,7 @@ func Start(configPath string, restart bool) {
 	runMainLoop(servers, errCh)
 }
 
-//非阻塞启动
+// NonBlockingStart 非阻塞启动
 func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, chan error, context.CancelFunc) {
 	config := loadConfig(configPath)
 	fmt.Printf("load config: %+v\n", config)
@@ -87,8 +87,8 @@ func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, c
 	if err := ratelimitv2.Initialize(ctx, &config.Limit); err != nil {
 		bootExit(fmt.Sprintf("ratelimitv2 core server initialize err: %s", err.Error()))
 	}
-	//初始化智研上报
-	//observer.Initialize(ctx, &config.Limit)
+	// 初始化智研上报
+	// observer.Initialize(ctx, &config.Limit)
 
 	// 启动server
 	errCh := make(chan error, len(config.APIServers))
@@ -104,7 +104,7 @@ func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, c
 		if err := selfRegister(registryCfg, servers, utils.ServerAddress); err != nil {
 			bootExit(fmt.Sprintf("service registry err: %s", err.Error()))
 		}
-		if registryCfg.HealthCheckEnable { //启动心跳上报
+		if registryCfg.HealthCheckEnable { // 启动心跳上报
 			startHeartbeat(ctx)
 		}
 	} else {
