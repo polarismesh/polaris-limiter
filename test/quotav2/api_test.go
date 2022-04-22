@@ -20,15 +20,16 @@ package quotav2
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
-	. "github.com/smartystreets/goconvey/convey"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	slog "log"
 	"net/http"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	. "github.com/smartystreets/goconvey/convey"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	_ "github.com/polarismesh/polaris-limiter/apiserver/grpc"
 	_ "github.com/polarismesh/polaris-limiter/apiserver/http"
@@ -78,7 +79,7 @@ var (
 	multiWholeDivide uint32 = 100
 )
 
-//构造初始化请求
+// 构造初始化请求
 func buildInitRequestWitDuration(svcName string, namespace string, methodName string,
 	clientId string, totals map[time.Duration]uint32, quotaMode apiv2.QuotaMode) *apiv2.RateLimitRequest {
 	req := &apiv2.RateLimitRequest{
@@ -101,7 +102,7 @@ func buildInitRequestWitDuration(svcName string, namespace string, methodName st
 	return req
 }
 
-//构造初始化请求
+// 构造初始化请求
 func buildAcquireRequestWitDuration(initResp *apiv2.RateLimitInitResponse,
 	usedAmounts map[time.Duration]uint32, limitAmounts map[time.Duration]uint32) *apiv2.RateLimitRequest {
 	req := &apiv2.RateLimitRequest{
@@ -123,9 +124,9 @@ func buildAcquireRequestWitDuration(initResp *apiv2.RateLimitInitResponse,
 	return req
 }
 
-//进行初始化，第一个调用init方法，期望看到初始化成功
-//配额上报汇总，并发上报成功，期望看到按时间滑窗汇总结果
-//配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
+// 进行初始化，第一个调用init方法，期望看到初始化成功
+// 配额上报汇总，并发上报成功，期望看到按时间滑窗汇总结果
+// 配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
 func TestSingleThreadInitAcquireQuery(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
@@ -139,7 +140,7 @@ func TestSingleThreadInitAcquireQuery(t *testing.T) {
 			slog.Printf("finallize\n")
 			conn.Close()
 		}()
-		//初始化上报数据
+		// 初始化上报数据
 		client := apiv2.NewRateLimitGRPCV2Client(conn)
 		initReq := buildInitRequestWitDuration(singleSvcName, singleNamespace, singleMethodName,
 			singleClientId, map[time.Duration]uint32{
@@ -156,7 +157,7 @@ func TestSingleThreadInitAcquireQuery(t *testing.T) {
 		slog.Printf("v2 init resp recved, %+v\n", initResp)
 		So(initResp.Cmd, ShouldEqual, apiv2.RateLimitCmd_INIT)
 		So(initResp.RateLimitInitResponse.Counters[0].Left, ShouldEqual, singleTotal)
-		//处理测试逻辑
+		// 处理测试逻辑
 		var total uint32
 		var limited uint32
 		for i := 0; i < 2000; i++ {
@@ -194,9 +195,9 @@ func TestSingleThreadInitAcquireQuery(t *testing.T) {
 	})
 }
 
-//进行初始化，第一个调用init方法，期望看到初始化成功
-//配额上报汇总，并发上报成功，期望看到按时间滑窗汇总结果
-//配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
+// 进行初始化，第一个调用init方法，期望看到初始化成功
+// 配额上报汇总，并发上报成功，期望看到按时间滑窗汇总结果
+// 配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
 func TestSingleThreadStreamingFail(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
@@ -210,7 +211,7 @@ func TestSingleThreadStreamingFail(t *testing.T) {
 			slog.Printf("finallize\n")
 			conn.Close()
 		}()
-		//初始化上报数据
+		// 初始化上报数据
 		client := apiv2.NewRateLimitGRPCV2Client(conn)
 		var streams []apiv2.RateLimitGRPCV2_ServiceClient
 		for i := 0; i < 2; i++ {
@@ -229,7 +230,7 @@ func TestSingleThreadStreamingFail(t *testing.T) {
 			So(initResp.GetRateLimitInitResponse().Code, ShouldEqual, apiv2.ExecuteSuccess)
 			slog.Printf("v2 init resp recved, %+v\n", initResp)
 			So(initResp.Cmd, ShouldEqual, apiv2.RateLimitCmd_INIT)
-			//处理测试逻辑
+			// 处理测试逻辑
 			var total uint32
 			var limited uint32
 			var quotaUsed uint32
@@ -270,9 +271,9 @@ func TestSingleThreadStreamingFail(t *testing.T) {
 	time.Sleep(2 * time.Second)
 }
 
-//进行初始化，第一个调用init方法，期望看到初始化成功
-//配额上报汇总，并发上报成功，期望看到按时间滑窗汇总结果
-//配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
+// 进行初始化，第一个调用init方法，期望看到初始化成功
+// 配额上报汇总，并发上报成功，期望看到按时间滑窗汇总结果
+// 配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
 func TestSingleThreadStreamingQuery(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
@@ -286,7 +287,7 @@ func TestSingleThreadStreamingQuery(t *testing.T) {
 			slog.Printf("finallize\n")
 			conn.Close()
 		}()
-		//初始化上报数据
+		// 初始化上报数据
 		client := apiv2.NewRateLimitGRPCV2Client(conn)
 		for i := 0; i < 200; i++ {
 			initReq := buildInitRequestWitDuration(singleSvcName, singleNamespace, singleMethodName,
@@ -303,7 +304,7 @@ func TestSingleThreadStreamingQuery(t *testing.T) {
 			So(initResp.GetRateLimitInitResponse().Code, ShouldEqual, apiv2.ExecuteSuccess)
 			slog.Printf("v2 init resp recved, %+v\n", initResp)
 			So(initResp.Cmd, ShouldEqual, apiv2.RateLimitCmd_INIT)
-			//处理测试逻辑
+			// 处理测试逻辑
 			var total uint32
 			var limited uint32
 			var quotaUsed uint32
@@ -341,17 +342,17 @@ func TestSingleThreadStreamingQuery(t *testing.T) {
 	})
 }
 
-//单机均摊阈值的测试
+// 单机均摊阈值的测试
 func TestMultiThreadDivideInitAcquireQuery(t *testing.T) {
 	testMultiThreadInitAcquireQuery(t, multiSvcName1, multiWholeDivide, apiv2.QuotaMode_DIVIDE)
 }
 
-//单机均摊阈值的测试
+// 单机均摊阈值的测试
 func TestMultiThreadWholeInitAcquireQuery(t *testing.T) {
 	testMultiThreadInitAcquireQuery(t, multiSvcName2, multiWholeTotal, apiv2.QuotaMode_WHOLE)
 }
 
-//返回期待的总量
+// 返回期待的总量
 func expectTotal(count int, total uint32, mode apiv2.QuotaMode) uint32 {
 	if mode == apiv2.QuotaMode_WHOLE {
 		return total
@@ -361,7 +362,7 @@ func expectTotal(count int, total uint32, mode apiv2.QuotaMode) uint32 {
 
 const IpPattern = "127.0.0.%d"
 
-//单个线程内测试限流
+// 单个线程内测试限流
 func testRateLimitInOneThread(idx int, wg *sync.WaitGroup, t *testing.T,
 	conn *grpc.ClientConn, svcName string, total uint32, mode apiv2.QuotaMode) {
 	defer wg.Done()
@@ -386,7 +387,7 @@ func testRateLimitInOneThread(idx int, wg *sync.WaitGroup, t *testing.T,
 		So(err, ShouldBeNil)
 		initResp, err = stream.Recv()
 		So(err, ShouldBeNil)
-		//处理测试逻辑
+		// 处理测试逻辑
 		var total uint32
 		var limited uint32
 		for i := 0; i < 20000; i++ {
@@ -424,9 +425,9 @@ func testRateLimitInOneThread(idx int, wg *sync.WaitGroup, t *testing.T,
 	})
 }
 
-//进行初始化，第一个调用init方法，期望看到初始化成功
-//配额上报汇总，并发上报成功，期望看到按时间滑窗汇总结果
-//配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
+// 进行初始化，第一个调用init方法，期望看到初始化成功
+// 配额上报汇总，并发上报成功，期望看到按时间滑窗汇总结果
+// 配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
 func testMultiThreadInitAcquireQuery(t *testing.T, svcName string, total uint32, mode apiv2.QuotaMode) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure())
@@ -441,7 +442,7 @@ func testMultiThreadInitAcquireQuery(t *testing.T, svcName string, total uint32,
 		slog.Printf("finallize\n")
 		conn.Close()
 	}()
-	//初始化上报数据
+	// 初始化上报数据
 	wg := &sync.WaitGroup{}
 	clientCount := 4
 	wg.Add(clientCount)
@@ -453,7 +454,7 @@ func testMultiThreadInitAcquireQuery(t *testing.T, svcName string, total uint32,
 	time.Sleep(10 * time.Second)
 }
 
-//测试超过1s周期的限流表现
+// 测试超过1s周期的限流表现
 func TestSingleThreadLongAcquireQuery(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
@@ -467,7 +468,7 @@ func TestSingleThreadLongAcquireQuery(t *testing.T) {
 			slog.Printf("finallize\n")
 			conn.Close()
 		}()
-		//初始化上报数据
+		// 初始化上报数据
 		client := apiv2.NewRateLimitGRPCV2Client(conn)
 		initReq := buildInitRequestWitDuration(singleLongSvcName, singleNamespace, singleMethodName,
 			singleClientId, map[time.Duration]uint32{
@@ -484,7 +485,7 @@ func TestSingleThreadLongAcquireQuery(t *testing.T) {
 		slog.Printf("v2 init resp recved, %+v\n", initResp)
 		So(initResp.Cmd, ShouldEqual, apiv2.RateLimitCmd_INIT)
 		So(initResp.RateLimitInitResponse.Counters[0].Left, ShouldEqual, singleLongTotal)
-		//处理测试逻辑
+		// 处理测试逻辑
 		var total uint32
 		var limited uint32
 		timeoutCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
@@ -530,7 +531,7 @@ func TestSingleThreadLongAcquireQuery(t *testing.T) {
 	})
 }
 
-//测试时间对齐功能
+// 测试时间对齐功能
 func TestTimeAdjust(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
@@ -544,7 +545,7 @@ func TestTimeAdjust(t *testing.T) {
 			slog.Printf("finallize\n")
 			conn.Close()
 		}()
-		//初始化上报数据
+		// 初始化上报数据
 		client := apiv2.NewRateLimitGRPCV2Client(conn)
 		resp, err := client.TimeAdjust(context.Background(), &apiv2.TimeAdjustRequest{})
 		So(err, ShouldBeNil)
@@ -554,7 +555,7 @@ func TestTimeAdjust(t *testing.T) {
 	})
 }
 
-//测试客户端上下线
+// 测试客户端上下线
 func TestClientUpAndDown(t *testing.T) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure())
@@ -569,7 +570,7 @@ func TestClientUpAndDown(t *testing.T) {
 		slog.Printf("finallize\n")
 		conn.Close()
 	}()
-	//初始化上报数据
+	// 初始化上报数据
 	wg := &sync.WaitGroup{}
 	clientCount := 2
 	wg.Add(clientCount)
@@ -629,7 +630,7 @@ func TestClientUpAndDown(t *testing.T) {
 
 }
 
-//测试客户端上下线
+// 测试客户端上下线
 func TestMultiClientReconnect(t *testing.T) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure())
@@ -644,7 +645,7 @@ func TestMultiClientReconnect(t *testing.T) {
 		slog.Printf("finallize\n")
 		conn.Close()
 	}()
-	//初始化上报数据
+	// 初始化上报数据
 	wg := &sync.WaitGroup{}
 	clientCount := 1
 	wg.Add(clientCount)

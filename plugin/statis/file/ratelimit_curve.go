@@ -28,17 +28,17 @@ import (
 	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
-//限流曲线上报
+// RateLimitCurveReporter 限流曲线上报
 type RateLimitCurveReporter struct {
-	//上报监控的应用名
+	// appName 上报监控的应用名
 	appName string
-	//采集器列表
+	// collectors 采集器列表
 	collectors *sync.Map
-	//被丢弃，没有来得及上报的
+	// droppedCollectors 被丢弃，没有来得及上报的
 	droppedCollectors *sync.Map
 }
 
-//创建曲线上报系统
+// NewRateLimitCurveReporter 创建曲线上报系统
 func NewRateLimitCurveReporter(config *ReportConfig) *RateLimitCurveReporter {
 	reporter := &RateLimitCurveReporter{}
 	reporter.appName = config.RateLimitAppName
@@ -48,7 +48,7 @@ func NewRateLimitCurveReporter(config *ReportConfig) *RateLimitCurveReporter {
 	return reporter
 }
 
-//获取限流数据
+// fetchRateLimitData 获取限流数据
 func fetchRateLimitData(statValue plugin.RateLimitStatValue, isCurve bool) plugin.RateLimitData {
 	if isCurve {
 		return statValue.GetCurveData()
@@ -56,18 +56,18 @@ func fetchRateLimitData(statValue plugin.RateLimitStatValue, isCurve bool) plugi
 	return statValue.GetPrecisionData()
 }
 
-//判断本次是否需要处理该统计项
+// 判断本次是否需要处理该统计项
 func needProcess(isCurve bool, rateLimitData plugin.RateLimitData, curTimeMs int64, duration time.Duration) bool {
 	if isCurve {
 		return true
 	}
-	//对于精度统计，必须是一个完整的统计项，否则精度会存在问题
+	// 对于精度统计，必须是一个完整的统计项，否则精度会存在问题
 	lastFetchTimeMs := rateLimitData.GetLastFetchTime()
 	timePassed := curTimeMs - lastFetchTimeMs
 	return timePassed >= duration.Milliseconds()
 }
 
-//处理采集器的数据
+// 处理采集器的数据
 func (s *RateLimitCurveReporter) processCollector(statValues map[interface{}]plugin.RateLimitStatValue,
 	collector plugin.RateLimitStatCollector, statValueSlice []plugin.RateLimitStatValue,
 	isCurve bool) []plugin.RateLimitStatValue {
@@ -107,7 +107,7 @@ func (s *RateLimitCurveReporter) processCollector(statValues map[interface{}]plu
 	return statValueSlice
 }
 
-//构建上报记录
+// BuildReportRecord 构建上报记录
 func (s *RateLimitCurveReporter) BuildReportRecord() *ReportRecord {
 	record := &ReportRecord{
 		AppName: s.appName,
@@ -122,7 +122,7 @@ func (s *RateLimitCurveReporter) BuildReportRecord() *ReportRecord {
 	return record
 }
 
-//汇总所有的统计数据
+// MergeAllStatValues 汇总所有的统计数据
 func (s *RateLimitCurveReporter) MergeAllStatValues(isCurve bool) map[interface{}]plugin.RateLimitStatValue {
 	var statValuesSlice []plugin.RateLimitStatValue
 	var statValues = make(map[interface{}]plugin.RateLimitStatValue)
@@ -135,7 +135,7 @@ func (s *RateLimitCurveReporter) MergeAllStatValues(isCurve bool) map[interface{
 		collector := value.(plugin.RateLimitStatCollector)
 		statValuesSlice = s.processCollector(statValues, collector, statValuesSlice, isCurve)
 		if isCurve {
-			//处理完就彻底删除
+			// 处理完就彻底删除
 			s.droppedCollectors.Delete(key)
 		}
 		return true
@@ -149,7 +149,7 @@ const (
 	rateLimitValueStrPattern = "limit_count=%d&quota_count=%d"
 )
 
-//上报的Tag字符串
+// GetTagStr 上报的Tag字符串
 func (s *RateLimitCurveReporter) GetTagStr(value plugin.RateLimitStatValue) string {
 	tagBuilder := strings.Builder{}
 	tagBuilder.WriteString(fmt.Sprintf(rateLimitTagStrPattern, value.GetNamespace(), value.GetService(),
@@ -158,7 +158,7 @@ func (s *RateLimitCurveReporter) GetTagStr(value plugin.RateLimitStatValue) stri
 	return tagBuilder.String()
 }
 
-//上报的数据值
+// GetValueStr 上报的数据值
 func (s *RateLimitCurveReporter) GetValueStr(value plugin.RateLimitStatValue) string {
 	reportLimitedValue := value.GetCurveData().GetLimited()
 	value.GetCurveData().AddLimited(0 - reportLimitedValue)
@@ -167,21 +167,21 @@ func (s *RateLimitCurveReporter) GetValueStr(value plugin.RateLimitStatValue) st
 	return fmt.Sprintf(rateLimitValueStrPattern, reportLimitedValue, reportPassedValue)
 }
 
-//创建采集器V2
+// CreateCollectorV2 创建采集器V2
 func (s *RateLimitCurveReporter) CreateCollectorV2() *plugin.RateLimitStatCollectorV2 {
 	collectorV2 := plugin.NewRateLimitStatCollectorV2()
 	s.collectors.Store(collectorV2.ID(), collectorV2)
 	return collectorV2
 }
 
-//创建采集器V2
+// CreateCollectorV1 创建采集器V2
 func (s *RateLimitCurveReporter) CreateCollectorV1() *plugin.RateLimitStatCollectorV1 {
 	collectorV1 := plugin.NewRateLimitStatCollectorV1()
 	s.collectors.Store(collectorV1.ID(), collectorV1)
 	return collectorV1
 }
 
-//创建采集器V2
+// DropCollector 创建采集器V2
 func (s *RateLimitCurveReporter) DropCollector(collector plugin.RateLimitStatCollector) {
 	s.collectors.Delete(collector.ID())
 	s.droppedCollectors.Store(collector.ID(), collector)

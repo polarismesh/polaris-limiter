@@ -30,7 +30,7 @@ const (
 	defaultLogReportLogMaxAge  = 10
 )
 
-//智研上报配置项
+// ReportConfig 智研上报配置项
 type ReportConfig struct {
 	RateLimitAppName          string `json:"ratelimit-app-name"`
 	RateLimitReportLogPath    string `json:"ratelimit_report_log_path"`
@@ -45,7 +45,7 @@ type ReportConfig struct {
 	LogMaxAge                 int    `json:"log_max_age"`
 }
 
-//校验
+// Validate 校验
 func (r *ReportConfig) Validate() error {
 	if len(r.RateLimitAppName) == 0 {
 		return errors.New("ratelimit-app-name is empty")
@@ -54,10 +54,10 @@ func (r *ReportConfig) Validate() error {
 		return errors.New("server-app-name is empty")
 	}
 	if r.LogInterval < minLogInterval {
-		return errors.New(fmt.Sprintf("log_interval must be greater than %d", minLogInterval))
+		return fmt.Errorf("log_interval must be greater than %d", minLogInterval)
 	}
 	if r.PrecisionLogInterval < minPrecisionLogInterval {
-		return errors.New(fmt.Sprintf("precision_log_interval must be greater than %d", minPrecisionLogInterval))
+		return fmt.Errorf("precision_log_interval must be greater than %d", minPrecisionLogInterval)
 	}
 	if len(r.RateLimitReportLogPath) == 0 {
 		return errors.New("ratelimit_report_log_path is empty")

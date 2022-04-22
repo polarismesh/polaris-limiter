@@ -31,17 +31,17 @@ type structClientIPCtx struct{}
 // client address ctx
 type clientAddrCtx struct{}
 
-//type ClientPortCtx struct{}
+// type ClientPortCtx struct{}
 
 // user agent
 type userAgent struct{}
 
-// 增加requestID
+// WithRequestID 增加requestID
 func WithRequestID(ctx context.Context, requestID string) context.Context {
 	return context.WithValue(ctx, requestIDCtx{}, requestID)
 }
 
-// 从ctx中获取requestID
+// ParseRequestID 从ctx中获取requestID
 func ParseRequestID(ctx context.Context) string {
 	if ctx == nil {
 		return ""
@@ -55,17 +55,17 @@ func ParseRequestID(ctx context.Context) string {
 	return id
 }
 
-// ctx增加客户端IP
+// WithClientIP ctx增加客户端IP
 func WithClientIP(ctx context.Context, ip string) context.Context {
 	return context.WithValue(ctx, clientIPCtx{}, ip)
 }
 
-// ctx增加客户端IP
+// WithStructClientIP ctx增加客户端IP
 func WithStructClientIP(ctx context.Context, ip *IPAddress) context.Context {
 	return context.WithValue(ctx, structClientIPCtx{}, ip)
 }
 
-// 从ctx中获取客户端IP
+// ParseClientIP 从ctx中获取客户端IP
 func ParseClientIP(ctx context.Context) string {
 	if ctx == nil {
 		return ""
@@ -78,7 +78,7 @@ func ParseClientIP(ctx context.Context) string {
 	return ip
 }
 
-// ctx增加客户端IP
+// ParseStructClientIP ctx增加客户端IP
 func ParseStructClientIP(ctx context.Context) *IPAddress {
 	if ctx == nil {
 		return &IPAddress{}
@@ -91,12 +91,12 @@ func ParseStructClientIP(ctx context.Context) *IPAddress {
 	return ip
 }
 
-// ctx增加客户端连接地址
+// WithClientAddr ctx增加客户端连接地址
 func WithClientAddr(ctx context.Context, addr string) context.Context {
 	return context.WithValue(ctx, clientAddrCtx{}, addr)
 }
 
-// 从ctx中获取客户端连接地址，ip:port形式
+// ParseClientAddr 从ctx中获取客户端连接地址，ip:port形式
 func ParseClientAddr(ctx context.Context) string {
 	if ctx == nil {
 		return ""
@@ -109,12 +109,12 @@ func ParseClientAddr(ctx context.Context) string {
 	return addr
 }
 
-// user agent
+// WithUserAgent user agent
 func WithUserAgent(ctx context.Context, agent string) context.Context {
 	return context.WithValue(ctx, userAgent{}, agent)
 }
 
-// parse agent
+// ParseUserAgent parse agent
 func ParseUserAgent(ctx context.Context) string {
 	if ctx == nil {
 		return ""

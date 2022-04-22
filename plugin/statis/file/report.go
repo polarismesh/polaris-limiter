@@ -19,43 +19,45 @@ package file
 
 import (
 	"fmt"
-	"github.com/polarismesh/polaris-limiter/pkg/utils"
+	"strings"
+	"time"
+
 	"github.com/natefinch/lumberjack"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"strings"
-	"time"
+
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
-//上报处理器
+// ReportHandler 上报处理器
 type ReportHandler interface {
-	//上报
+	// Report 上报
 	Report(*ReportRecord)
 }
 
-//单条上报记录
+// ReportItem 单条上报记录
 type ReportItem struct {
-	TagStr string
+	TagStr   string
 	ValueStr string
 }
 
-//上报数据
+// ReportRecord 上报数据
 type ReportRecord struct {
 	AppName string
 	Tags    []*ReportItem
 }
 
-//是否存在数据
+// HasTags 是否存在数据
 func (r *ReportRecord) HasTags() bool {
 	return len(r.Tags) > 0
 }
 
-//上报处理器实现
+// 上报处理器实现
 type reportHandler struct {
 	loggers map[string]*zap.Logger
 }
 
-//新建上报处理器
+// NewReportHandler 新建上报处理器
 func NewReportHandler(cfg *ReportConfig) ReportHandler {
 	handler := &reportHandler{loggers: make(map[string]*zap.Logger)}
 	handler.loggers[cfg.ServerAppName] =
@@ -67,7 +69,7 @@ func NewReportHandler(cfg *ReportConfig) ReportHandler {
 
 const pattern = "%s %s %s %s 0\n"
 
-//执行上报
+// Report 执行上报
 func (r *reportHandler) Report(record *ReportRecord) {
 	builder := &strings.Builder{}
 	builder.WriteString(time.Now().Format("2006-01-02 15:04:05.000000"))
@@ -79,7 +81,7 @@ func (r *reportHandler) Report(record *ReportRecord) {
 	r.loggers[record.AppName].Info(builder.String())
 }
 
-//初始化日志上报
+// 初始化日志上报
 func initLogger(fileName string, maxSize int, maxBackups int, maxAge int) *zap.Logger {
 	// 日志的encode，不打印日志级别和时间戳
 	encCfg := zapcore.EncoderConfig{

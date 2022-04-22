@@ -19,15 +19,16 @@ package config
 
 import (
 	"fmt"
-	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"math"
 	"time"
+
+	"github.com/polarismesh/polaris-limiter/pkg/log"
 )
 
-// ratelimit的相关配置
+// Config ratelimit的相关配置
 type Config struct {
-	//当前限流server节点标识
-	Myid    uint      `yaml:"myid"`
+	// 当前限流server节点标识
+	Myid uint `yaml:"myid"`
 
 	// 计数器分组个数
 	CounterGroup uint32 `yaml:"counter-group"`
@@ -38,10 +39,10 @@ type Config struct {
 	// 最大客户端个数
 	MaxClient uint32 `yaml:"max-client"`
 
-	//推送协程数
+	// 推送协程数
 	PushWorker uint32 `yaml:"push-worker"`
 
-	//默认滑窗数量
+	// 默认滑窗数量
 	SlideCount uint32 `yaml:"slide-count"`
 
 	// 回收本地计数器的扫描时间
@@ -59,10 +60,10 @@ type Config struct {
 	// 本地缓存需要刷新的阈值，当达到该阈值的key无更新，则需要从远端加载最新的数据到本地
 	FlushLocalStorageThreshold time.Duration `yaml:"flush-local-storage-threshold"`
 
-	//最大查询等待时间
+	// 最大查询等待时间
 	MaxQueryWait time.Duration `yaml:"max_query_wait"`
 
-	//最小查询等待时间
+	// 最小查询等待时间
 	MinQueryWait time.Duration `yaml:"min_query_wait"`
 }
 
@@ -72,15 +73,15 @@ const (
 	MaxSlideCount       = 10
 	defaultSlideCount   = 1
 	defaultMaxIndex     = math.MaxUint8
-	maxCounter          = math.MaxUint32 ^ (math.MaxUint8 << 24) //16,777,215
+	maxCounter          = math.MaxUint32 ^ (math.MaxUint8 << 24) // 16,777,215
 )
 
-// 返回一份默认的配置信息
+// DefaultConfig 返回一份默认的配置信息
 func DefaultConfig() *Config {
 	cfg := &Config{
 		Myid:                         1,
 		CounterGroup:                 64,
-		MaxCounter:                   maxCounter, //默认最大1千万的key
+		MaxCounter:                   maxCounter, // 默认最大1千万的key
 		MaxClient:                    20 * 1000,
 		SlideCount:                   defaultSlideCount,
 		PushWorker:                   4,
@@ -95,14 +96,14 @@ func DefaultConfig() *Config {
 	return cfg
 }
 
-// 解析配置
+// ParseConfig 解析配置
 func ParseConfig(config *Config) (*Config, error) {
 	if config == nil {
 		return DefaultConfig(), nil
 	}
 
 	d := DefaultConfig()
-	//myid不能为0，避免与线上存量的出现冲突
+	// myid不能为0，避免与线上存量的出现冲突
 	if config.Myid == 0 || config.Myid > defaultMaxIndex {
 		return nil, fmt.Errorf("myid should be less than %d and greater than 0", defaultMaxIndex)
 	}

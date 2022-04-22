@@ -19,8 +19,9 @@ package plugin
 
 import (
 	"fmt"
-	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"sync"
+
+	"github.com/polarismesh/polaris-limiter/pkg/log"
 )
 
 var (
@@ -29,26 +30,26 @@ var (
 	initializeSet = make(map[string]Plugin)
 )
 
-// 通用插件接口
+// Plugin 通用插件接口
 type Plugin interface {
 	Name() string
 	Initialize(c *ConfigEntry) error
 	Destroy() error
 }
 
-// 插件总配置
+// Config 插件总配置
 type Config struct {
 	Storage *ConfigEntry `yaml:"storage"`
 	Statis  *ConfigEntry `yaml:"statis"`
 }
 
-// 每个插件配置
+// ConfigEntry 每个插件配置
 type ConfigEntry struct {
 	Name   string                 `yaml:"name"`
 	Option map[string]interface{} `yaml:"option"`
 }
 
-// 注册插件
+// RegisterPlugin 注册插件
 func RegisterPlugin(name string, plugin Plugin) {
 	if _, exist := pluginSet[name]; exist {
 		panic(fmt.Sprintf("existed plugin: name=%v", name))
@@ -57,12 +58,12 @@ func RegisterPlugin(name string, plugin Plugin) {
 	pluginSet[name] = plugin
 }
 
-// 插件全局配置
+// GlobalInitialize 插件全局配置
 func GlobalInitialize(c *Config) {
 	config = c
 }
 
-// 插件全局销毁函数
+// GlobalDestroy 插件全局销毁函数
 func GlobalDestroy() {
 	for _, plugin := range initializeSet {
 		_ = plugin.Destroy()

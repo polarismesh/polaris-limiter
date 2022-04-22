@@ -27,13 +27,11 @@ func init() {
 	plugin.RegisterPlugin(s.Name(), s)
 }
 
-//智研上报处理器
+// StaticsWorker 智研上报处理器
 type StaticsWorker struct {
 }
 
-/**
- * @brief 获取统计插件名称
- */
+// Name 获取统计插件名称
 func (s *StaticsWorker) Name() string {
 	return "echo"
 }
@@ -52,26 +50,26 @@ func (s *StaticsWorker) Destroy() error {
 	return nil
 }
 
-//创建采集器V1，每个stream上来后获取一次
+// 创建采集器V1，每个stream上来后获取一次
 func (s *StaticsWorker) CreateRateLimitStatCollectorV1() *plugin.RateLimitStatCollectorV1 {
 	return plugin.NewRateLimitStatCollectorV1()
 }
 
-//创建采集器V2，每个stream上来后获取一次
+// 创建采集器V2，每个stream上来后获取一次
 func (s *StaticsWorker) CreateRateLimitStatCollectorV2() *plugin.RateLimitStatCollectorV2 {
 	return plugin.NewRateLimitStatCollectorV2()
 }
 
-//归还采集器
+// 归还采集器
 func (s *StaticsWorker) DropRateLimitStatCollector(collector plugin.RateLimitStatCollector) {
 	return
 }
 
-//服务方法调用结果反馈，含有规则的计算周期
+// 服务方法调用结果反馈，含有规则的计算周期
 func (s *StaticsWorker) AddAPICall(value plugin.APICallStatValue) {
 }
 
-//添加日志时间
+// 添加日志时间
 func (s *StaticsWorker) AddEventToLog(value plugin.EventToLog) {
 
 }

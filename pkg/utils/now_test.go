@@ -29,7 +29,7 @@ func TestTimestampMsToUtcIso8601(t *testing.T) {
 	fmt.Printf("now is %s\n", str)
 }
 
-//性能测试
+// 性能测试
 func BenchmarkCurrentMicrosecond(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -38,7 +38,7 @@ func BenchmarkCurrentMicrosecond(b *testing.B) {
 	}
 }
 
-//测试调用now函数性能
+// 测试调用now函数性能
 func BenchmarkTimeNow(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()

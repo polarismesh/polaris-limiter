@@ -25,34 +25,30 @@ var (
 	statisOnce = &sync.Once{}
 )
 
-/**
- * @brief 统计插件接口
- */
+// Statis 统计插件接口
 type Statis interface {
 	Plugin
-	//创建采集器V1，每个stream上来后获取一次
+	// CreateRateLimitStatCollectorV1 创建采集器V1，每个stream上来后获取一次
 	CreateRateLimitStatCollectorV1() *RateLimitStatCollectorV1
-	//创建采集器V2，每个stream上来后获取一次
+	// CreateRateLimitStatCollectorV2 创建采集器V2，每个stream上来后获取一次
 	CreateRateLimitStatCollectorV2() *RateLimitStatCollectorV2
-	//归还采集器
+	// DropRateLimitStatCollector 归还采集器
 	DropRateLimitStatCollector(RateLimitStatCollector)
-	//服务方法调用结果反馈，含有规则的计算周期
+	// AddAPICall 服务方法调用结果反馈，含有规则的计算周期
 	AddAPICall(value APICallStatValue)
-	//添加日志时间
+	// AddEventToLog 添加日志时间
 	AddEventToLog(value EventToLog)
 }
 
-//可输出的事件
+// EventToLog 可输出的事件
 type EventToLog interface {
-	//获取事件类型
+	// GetEventType 获取事件类型
 	GetEventType() string
-	//变成Json输出
+	// ToJson 变成Json输出
 	ToJson() string
 }
 
-/**
- * @brief 获取统计插件
- */
+// GetStatis 获取统计插件
 func GetStatis() (Statis, error) {
 	plugin, err := subInitialize("statis", config.Statis, statisOnce)
 	if err != nil || plugin == nil {

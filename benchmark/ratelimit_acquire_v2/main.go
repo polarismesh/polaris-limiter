@@ -56,7 +56,7 @@ var (
 	benchTotal      uint32 = 20000
 )
 
-//构造初始化请求
+// 构造初始化请求
 func buildInitRequest() *apiv2.RateLimitRequest {
 	req := &apiv2.RateLimitRequest{
 		Cmd: apiv2.RateLimitCmd_INIT,
@@ -78,7 +78,7 @@ func buildInitRequest() *apiv2.RateLimitRequest {
 	return req
 }
 
-//构造初始化请求
+// 构造初始化请求
 func buildReportRequest(resp *apiv2.RateLimitInitResponse, baseTimeMilli int64) *apiv2.RateLimitRequest {
 	req := &apiv2.RateLimitRequest{
 		Cmd: apiv2.RateLimitCmd_ACQUIRE,
@@ -96,7 +96,7 @@ func buildReportRequest(resp *apiv2.RateLimitInitResponse, baseTimeMilli int64) 
 	return req
 }
 
-//执行初始化操作
+// 执行初始化操作
 func doRateLimitInits(concurrency int) (
 	[]*apiv2.RateLimitInitResponse, []int64, []apiv2.RateLimitGRPCV2_ServiceClient, []*grpc.ClientConn) {
 	conns := make([]*grpc.ClientConn, 0, concurrency)
@@ -114,7 +114,7 @@ func doRateLimitInits(concurrency int) (
 		if err != nil {
 			log.Fatalln(err)
 		}
-		//执行初始化
+		// 执行初始化
 		initReq := buildInitRequest()
 		log.Printf("start to init %d, uid %s", i, initReq.GetRateLimitInitRequest().GetClientId())
 		err = stream.Send(initReq)
@@ -135,7 +135,7 @@ func doRateLimitInits(concurrency int) (
 	return initResponses, baseTimes, streams, conns
 }
 
-//性能测试流程
+// 性能测试流程
 func main() {
 	initArgs()
 	flag.Parse()
@@ -173,7 +173,7 @@ func main() {
 						log.Fatalln(err)
 					}
 					sentCount++
-					//time.Sleep(100 * time.Microsecond)
+					// time.Sleep(100 * time.Microsecond)
 				}
 			}
 		}(i)
