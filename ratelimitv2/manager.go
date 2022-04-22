@@ -20,17 +20,18 @@ package ratelimitv2
 import (
 	"container/list"
 	"context"
-	"github.com/modern-go/reflect2"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/modern-go/reflect2"
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
-//计数器标识
+// CounterIdentifier 计数器标识
 type CounterIdentifier struct {
 	Service   string
 	Namespace string
@@ -38,7 +39,7 @@ type CounterIdentifier struct {
 	Duration  time.Duration
 }
 
-//创建限流计数器标识
+// NewCounterIdentifier 创建限流计数器标识
 func NewCounterIdentifier(initReq *apiv2.RateLimitInitRequest, ruleIdx int) *CounterIdentifier {
 	target := initReq.GetTarget()
 	durationTime := time.Duration(initReq.GetTotals()[ruleIdx].GetDuration()) * time.Second
@@ -50,27 +51,27 @@ func NewCounterIdentifier(initReq *apiv2.RateLimitInitRequest, ruleIdx int) *Cou
 	}
 }
 
-//计数器管理类V2
+// CounterManagerV2 计数器管理类V2
 type CounterManagerV2 struct {
-	//同步锁
+	// 同步锁
 	mutex *sync.Mutex
-	//计数器列表
+	// 计数器列表
 	counters []CounterV2
-	//已经分配的counterKey
+	// 已经分配的counterKey
 	allocatedKeys map[uint32]bool
-	//去重map
+	// 去重map
 	counterMap *sync.Map
-	//最大计数器数量
+	// 最大计数器数量
 	maxSize uint32
-	//当前游标
+	// 当前游标
 	counterIdx uint32
-	//过期扫描周期
+	// 过期扫描周期
 	cleanupInterval time.Duration
-	//推送管理器
+	// 推送管理器
 	pushManager PushManager
 }
 
-//创建计数器管理类
+// NewCounterManagerV2 创建计数器管理类
 func NewCounterManagerV2(maxSize uint32, cleanupInterval time.Duration, pushManager PushManager) *CounterManagerV2 {
 	manager := &CounterManagerV2{
 		mutex:           &sync.Mutex{},
@@ -95,7 +96,7 @@ func (cm *CounterManagerV2) cleanupCounter(identifier CounterIdentifier, counter
 		delete(cm.allocatedKeys, counterKey)
 		log.Infof("counter %+v expired, lastUpdateTime %s, expireDuration %s, recycle counter key is %d",
 			identifier, utils.TimestampMsToUtcIso8601(counter.LastUpdateTime()), counter.ExpireDuration(), counterKey)
-		//上报
+		// 上报
 		counterEvent := &CounterUpdateEvent{
 			TimeNumber: utils.TimestampMsToUtcIso8601(utils.CurrentMillisecond()),
 			EventType:  EventTypeCounterUpdate,
@@ -112,7 +113,7 @@ func (cm *CounterManagerV2) cleanupCounter(identifier CounterIdentifier, counter
 	return counter, false
 }
 
-//启动过期清理
+// Start 启动过期清理
 func (cm *CounterManagerV2) Start(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(cm.cleanupInterval)
@@ -156,7 +157,7 @@ func (cm *CounterManagerV2) lookupCounterKey() (apiv2.Code, uint32) {
 	return apiv2.ExceedMaxCounter, 0
 }
 
-//分配计数器
+// 分配计数器
 func (cm *CounterManagerV2) allocateCounterKey(
 	identifier *CounterIdentifier, initRequest InitRequest) (apiv2.Code, CounterV2, bool) {
 	cm.mutex.Lock()
@@ -181,12 +182,12 @@ func (cm *CounterManagerV2) allocateCounterKey(
 	return apiv2.ExecuteSuccess, counter, false
 }
 
-//转换成数组下标
+// 转换成数组下标
 func toArrayIndex(key uint32) int {
 	return int(key) - 1
 }
 
-//增加计数器
+// AddCounter 增加计数器
 func (cm *CounterManagerV2) AddCounter(initReq *apiv2.RateLimitInitRequest, ruleIdx int,
 	sender Client, expireDuration time.Duration) (apiv2.Code, CounterV2) {
 	identifier := NewCounterIdentifier(initReq, ruleIdx)
@@ -212,7 +213,7 @@ func (cm *CounterManagerV2) AddCounter(initReq *apiv2.RateLimitInitRequest, rule
 	return code, counter
 }
 
-//获取计数器
+// GetCounter 获取计数器
 func (cm *CounterManagerV2) GetCounter(counterKey uint32) (apiv2.Code, CounterV2) {
 	if counterKey > cm.maxSize {
 		return apiv2.NotFoundLimiter, nil
@@ -224,22 +225,22 @@ func (cm *CounterManagerV2) GetCounter(counterKey uint32) (apiv2.Code, CounterV2
 	return apiv2.ExecuteSuccess, counter
 }
 
-//客户端管理器
+// ClientManager 客户端管理器
 type ClientManager struct {
 	mutex *sync.Mutex
-	//被淘汰的序号
+	// 被淘汰的序号
 	freeClientKeys *list.List
-	//客户端列表
+	// 客户端列表
 	clients []Client
-	//去重map
+	// 去重map
 	clientMap map[string]uint32
-	//最大客户端数量
+	// 最大客户端数量
 	maxSize uint32
-	//当前游标
+	// 当前游标
 	clientIdx uint32
 }
 
-//创建客户端管理器
+// NewClientManager 创建客户端管理器
 func NewClientManager(maxSize uint32) *ClientManager {
 	manager := &ClientManager{
 		mutex:          &sync.Mutex{},
@@ -252,7 +253,7 @@ func NewClientManager(maxSize uint32) *ClientManager {
 	return manager
 }
 
-//增加客户端
+// AddClient 增加客户端
 func (c *ClientManager) AddClient(
 	clientId string, clientIP *utils.IPAddress, streamContext *StreamContext) (apiv2.Code, Client) {
 	c.mutex.Lock()
@@ -260,7 +261,7 @@ func (c *ClientManager) AddClient(
 	if clientKey, ok := c.clientMap[clientId]; ok {
 		client := c.clients[toArrayIndex(clientKey)]
 		if client.UpdateStreamContext(streamContext) {
-			//没有被解引用，有效更新
+			// 没有被解引用，有效更新
 			return apiv2.ExecuteSuccess, client
 		}
 	}
@@ -280,7 +281,7 @@ func (c *ClientManager) AddClient(
 	return apiv2.ExecuteSuccess, client
 }
 
-//删除客户端
+// DelClient 删除客户端
 func (c *ClientManager) DelClient(client Client, streamCtxId string) bool {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
@@ -288,7 +289,7 @@ func (c *ClientManager) DelClient(client Client, streamCtxId string) bool {
 	curClient := c.clients[idx]
 	if !reflect2.IsNil(curClient) && curClient.Detach(client.ClientId(), streamCtxId) {
 		delete(c.clientMap, client.ClientId())
-		//同一连接的客户端，进行清理
+		// 同一连接的客户端，进行清理
 		c.clients[idx] = nil
 		c.freeClientKeys.PushBack(client.ClientKey())
 		return true

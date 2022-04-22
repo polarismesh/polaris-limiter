@@ -40,7 +40,7 @@ func (h *Server) initHandler() {
 	h.initMaintainHandler()
 }
 
-// 默认的handler
+// Index 默认的handler
 func (h *Server) Index(req *restful.Request, rsp *restful.Response) {
 	_, _ = rsp.Write([]byte("polaris limit server"))
 }

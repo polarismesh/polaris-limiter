@@ -19,17 +19,13 @@ package apiserver
 
 import "errors"
 
-/**
- * @brief API服务器配置
- */
+// Config API服务器配置 配置文件
 type Config struct {
 	Name   string
 	Option map[string]interface{}
 }
 
-/**
- * @brief API服务器接口
- */
+// APIServer API服务器接口
 type APIServer interface {
 	Initialize(option map[string]interface{}) error
 	Run(errCh chan error)
@@ -42,9 +38,7 @@ var (
 	Slots = make(map[string]APIServer)
 )
 
-/**
- * @brief 注册API服务器
- */
+// Register 注册API服务器
 func Register(name string, server APIServer) error {
 	if _, exist := Slots[name]; exist {
 		err := errors.New("api server name exist")

@@ -24,17 +24,17 @@ import (
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
-//抢占式分配器
+// OccupyAllocator 抢占式分配器
 type OccupyAllocator struct {
 	pushManager   PushManager
 	slidingWindow *utils.SlidingWindow
-	//配额已经用完
+	// 配额已经用完
 	quotaUsedOff uint32
 	mode         apiv2.Mode
 	counter      CounterV2
 }
 
-//创建抢占式分配器
+// NewOccupyAllocator 创建抢占式分配器
 func NewOccupyAllocator(slideCount int, intervalMs int, pushManager PushManager, counter CounterV2) QuotaAllocator {
 	return &OccupyAllocator{
 		pushManager:   pushManager,
@@ -44,17 +44,17 @@ func NewOccupyAllocator(slideCount int, intervalMs int, pushManager PushManager,
 	}
 }
 
-//返回分配器所属的模式
+// Mode 返回分配器所属的模式
 func (o *OccupyAllocator) Mode() apiv2.Mode {
 	return o.mode
 }
 
-//分配配额
+// Allocate 分配配额
 func (o *OccupyAllocator) Allocate(
 	client Client, quotaSum *apiv2.QuotaSum, timestampMs int64, startTimeMicro int64) *apiv2.QuotaLeft {
 	sumUsed := quotaSum.GetUsed()
 	sumLimit := quotaSum.GetLimited()
-	serverTimeMs := startTimeMicro/1e3
+	serverTimeMs := startTimeMicro / 1e3
 	totalUsed := o.slidingWindow.AddAndGetCurrent(timestampMs, serverTimeMs, sumUsed)
 	quotaLeft := int64(o.counter.MaxAmount()) - int64(totalUsed)
 	quotaLeftRet := &apiv2.QuotaLeft{
@@ -63,7 +63,7 @@ func (o *OccupyAllocator) Allocate(
 		Left:        quotaLeft,
 		ClientCount: o.counter.ClientCount(),
 	}
-	//无状态变更，不推送
+	// 无状态变更，不推送
 	if sumUsed == 0 && sumLimit == 0 {
 		quotaLeftRet.Left = quotaLeft
 		return quotaLeftRet
@@ -80,7 +80,7 @@ func (o *OccupyAllocator) Allocate(
 	return quotaLeftRet
 }
 
-//启动推送
+// 启动推送
 func (o *OccupyAllocator) doPush(quotaLeft *apiv2.QuotaLeft, client Client, startTimeMicro int64) {
 	resp := apiv2.NewRateLimitReportResponse(apiv2.ExecuteSuccess)
 	resp.QuotaLefts = append(resp.QuotaLefts, quotaLeft)

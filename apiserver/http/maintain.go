@@ -32,9 +32,9 @@ func (h *Server) initMaintainHandler() {
 	h.handler.Add(maintain)
 }
 
-// 获取本地缓存的counter个数
+// GetCountersTotal 获取本地缓存的counter个数
 func (h *Server) GetCountersTotal(req *restful.Request, rsp *restful.Response) {
-	//total := h.ratelimitServer.GetCountersTotal()
+	// total := h.ratelimitServer.GetCountersTotal()
 	total := 0
 	var out struct {
 		Count int
@@ -44,26 +44,27 @@ func (h *Server) GetCountersTotal(req *restful.Request, rsp *restful.Response) {
 	_ = rsp.WriteAsJson(out)
 }
 
+// ListCountersKeys 获取本地缓存的counter的key列表
 // 展示所有缓存数据的信息
 // 只返回本地信息，不返回远端信息（避免数据太多，占住太多请求远端的资源）
 func (h *Server) ListCountersKeys(req *restful.Request, rsp *restful.Response) {
-	//out, err := h.ratelimitServer.ListCountersInfo()
-	//if err != nil {
+	// out, err := h.ratelimitServer.ListCountersInfo()
+	// if err != nil {
 	//	_ = rsp.WriteError(http.StatusInternalServerError, err)
 	//	return
-	//}
+	// }
 
-	//_ = rsp.WriteAsJson(out)
+	// _ = rsp.WriteAsJson(out)
 	_, _ = rsp.Write([]byte("{}"))
 }
 
-// 获取counter本地和远端的信息
+// GetCounterStat 获取counter本地和远端的信息
 func (h *Server) GetCounterStat(req *restful.Request, rsp *restful.Response) {
-	//local, remote, err := h.ratelimitServer.GetCounterStat(req.QueryParameter("key"))
-	//if err != nil {
+	// local, remote, err := h.ratelimitServer.GetCounterStat(req.QueryParameter("key"))
+	// if err != nil {
 	//	_ = rsp.WriteError(http.StatusInternalServerError, err)
 	//	return
-	//}
+	// }
 	var local interface{} = nil
 	var remote interface{} = nil
 	var out struct {

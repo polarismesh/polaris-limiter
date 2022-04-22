@@ -29,13 +29,13 @@ import (
 	"github.com/polarismesh/polaris-limiter/ratelimitv2"
 )
 
-//限流Server：v2接口
+// RateLimitServiceV2 限流Server：v2接口
 type RateLimitServiceV2 struct {
 	coreServer *ratelimitv2.Server
 	statics    plugin.Statis
 }
 
-//处理Stream结束
+// 处理Stream结束
 func (s *RateLimitServiceV2) postService(streamCtx *ratelimitv2.StreamContext, ipAddr *utils.IPAddress,
 	collector *plugin.RateLimitStatCollectorV2, wrapper *clientWrapper) {
 	s.statics.DropRateLimitStatCollector(collector)
@@ -47,12 +47,12 @@ func (s *RateLimitServiceV2) postService(streamCtx *ratelimitv2.StreamContext, i
 	s.statics.AddEventToLog(ratelimitv2.NewStreamUpdateEvent(streamCtx.ContextId(), ipAddr, ratelimitv2.ActionDelete))
 }
 
-//客户端包装类
+// 客户端包装类
 type clientWrapper struct {
 	client ratelimitv2.Client
 }
 
-// 限流KEY初始化
+// Service 限流KEY初始化
 func (s *RateLimitServiceV2) Service(stream apiv2.RateLimitGRPCV2_ServiceServer) error {
 	ctx := parseContext(stream.Context())
 	clientIP := utils.ParseStructClientIP(ctx)
@@ -102,7 +102,7 @@ func (s *RateLimitServiceV2) Service(stream apiv2.RateLimitGRPCV2_ServiceServer)
 		if nil != clientWrapper.client && nil != counter {
 			counter.UpdateClientSendTime(clientWrapper.client, endTimeMicro)
 		}
-		//进行API调用上报
+		// 进行API调用上报
 		apiCallStatValue := plugin.PoolGetAPICallStatValueImpl()
 		apiCallStatValue.StatKey.APIKey = apiv2.GetAPIKey(allResp)
 		apiCallStatValue.StatKey.Code = apiv2.GetErrorCode(allResp)
@@ -123,7 +123,7 @@ func (s *RateLimitServiceV2) Service(stream apiv2.RateLimitGRPCV2_ServiceServer)
 	}
 }
 
-// 获取时间戳
+// TimeAdjust 获取时间戳
 func (s *RateLimitServiceV2) TimeAdjust(
 	ctx context.Context, req *apiv2.TimeAdjustRequest) (*apiv2.TimeAdjustResponse, error) {
 	return &apiv2.TimeAdjustResponse{ServerTimestamp: utils.CurrentMillisecond()}, nil

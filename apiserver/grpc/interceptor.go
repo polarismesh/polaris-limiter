@@ -34,7 +34,7 @@ import (
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
-//不需要走拦截器的同步方法
+// 不需要走拦截器的同步方法
 var unaryMethodsNoInterceptor = map[string]bool{
 	"/polaris.limiter.v2.RateLimitGRPCV2/TimeAdjust": true,
 }
@@ -43,7 +43,7 @@ var unaryMethodsNoInterceptor = map[string]bool{
 func (g *Server) unaryInterceptor(ctx context.Context, req interface{},
 	info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	if _, ok := unaryMethodsNoInterceptor[info.FullMethod]; ok {
-		//直接转发，无需走拦截器
+		// 直接转发，无需走拦截器
 		return handler(ctx, req)
 	}
 	tor := newInterceptor(ctx, g, info.FullMethod)
@@ -98,17 +98,17 @@ func (i *interceptor) preProcess() {
 	}
 }
 
-//校验是否正确的应答类型
+// 校验是否正确的应答类型
 type validResponse interface {
 	GetCode() *wrappers.UInt32Value
 }
 
-//提供消息ID
+// 提供消息ID
 type msgIdProvider interface {
 	GetMsgId() *wrappers.Int64Value
 }
 
-//获取返回码
+// GetV2ResponseCode 获取返回码
 func GetV2ResponseCode(rsp interface{}) (uint32, bool) {
 	if v2Resp, ok := rsp.(*apiv2.RateLimitResponse); ok {
 		return apiv2.GetErrorCode(v2Resp), true
@@ -127,7 +127,7 @@ func (i *interceptor) postProcess(rsp interface{}) {
 		return
 	}
 	if utils.IsSuccess(rspCode) {
-		//成功无需打印日志
+		// 成功无需打印日志
 		return
 	}
 	var msgId int64
