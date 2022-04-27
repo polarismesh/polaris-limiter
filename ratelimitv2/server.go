@@ -20,9 +20,10 @@ package ratelimitv2
 import (
 	"context"
 	"errors"
+	"sync"
+
 	"github.com/polarismesh/polaris-limiter/pkg/config"
 	"github.com/polarismesh/polaris-limiter/plugin"
-	"sync"
 )
 
 var (
@@ -32,31 +33,31 @@ var (
 	statics    plugin.Statis
 )
 
-//设置统计插件
+// SetStatics 设置统计插件
 func SetStatics(loadStatics plugin.Statis) {
 	statics = loadStatics
 }
 
-//v2版本的主server逻辑
+// Server v2版本的主server逻辑
 type Server struct {
 	counterMng *CounterManagerV2
 	clientMng  *ClientManager
 	cfg        config.Config
 }
 
-//获取计数器管理类
+// CounterMng 获取计数器管理类
 func (s *Server) CounterMng() *CounterManagerV2 {
 	return s.counterMng
 }
 
-//清理客户端
+// CleanupClient 清理客户端
 func (s *Server) CleanupClient(client Client, streamCtxId string) {
 	if s.clientMng.DelClient(client, streamCtxId) {
 		client.Cleanup()
 	}
 }
 
-// 获取已经初始化好的Server
+// GetRateLimitServer 获取已经初始化好的Server
 func GetRateLimitServer() (*Server, error) {
 	if !finishInit {
 		return nil, errors.New("server has not done initialize")
@@ -65,7 +66,7 @@ func GetRateLimitServer() (*Server, error) {
 	return server, nil
 }
 
-// 初始化函数
+// Initialize 初始化函数
 func Initialize(ctx context.Context, config *config.Config) error {
 	var err error
 	once.Do(func() {

@@ -29,7 +29,7 @@ import (
 	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
-//初始化客户端
+// InitializeClient 初始化客户端
 func (s *Server) InitializeClient(request *apiv2.RateLimitInitRequest,
 	client Client, clientIP *utils.IPAddress, streamContext *StreamContext) (*apiv2.RateLimitInitResponse, Client) {
 	if !reflect2.IsNil(client) {
@@ -45,7 +45,7 @@ func (s *Server) InitializeClient(request *apiv2.RateLimitInitRequest,
 	return nil, newClient
 }
 
-//初始化客户端
+// InitializeClientBatch 初始化客户端
 func (s *Server) InitializeClientBatch(request *apiv2.RateLimitBatchInitRequest, client Client,
 	clientIP *utils.IPAddress, streamContext *StreamContext) (*apiv2.RateLimitBatchInitResponse, Client) {
 	if !reflect2.IsNil(client) {
@@ -61,7 +61,7 @@ func (s *Server) InitializeClientBatch(request *apiv2.RateLimitBatchInitRequest,
 	return nil, newClient
 }
 
-// 限流KEY初始化
+// InitializeQuota 限流KEY初始化
 func (s *Server) InitializeQuota(ctx context.Context, client Client,
 	request *apiv2.RateLimitInitRequest) (*apiv2.RateLimitInitResponse, CounterV2) {
 	log.Info(fmt.Sprintf("get v2 init request: %+v", request), utils.ZapRequestID(ctx))
@@ -70,7 +70,7 @@ func (s *Server) InitializeQuota(ctx context.Context, client Client,
 		return resp, nil
 	}
 	var code = apiv2.ExecuteSuccess
-	//然后加入counter
+	// 然后加入counter
 	counters := make([]*apiv2.QuotaCounter, 0, len(request.GetTotals()))
 	expireDuration := 2 * maxDuration
 	nowMs := utils.CurrentMillisecond()
@@ -101,7 +101,7 @@ func (s *Server) InitializeQuota(ctx context.Context, client Client,
 	return resp, cCounter
 }
 
-// 限流KEY初始化
+// BatchInitializeQuota 限流KEY初始化
 func (s *Server) BatchInitializeQuota(ctx context.Context, client Client,
 	request *apiv2.RateLimitBatchInitRequest) (*apiv2.RateLimitBatchInitResponse, CounterV2) {
 	log.Info(fmt.Sprintf("get v2 batch init request: %+v", request), utils.ZapRequestID(ctx))
@@ -181,7 +181,7 @@ func (s *Server) unboxCounterKey(counterKey uint32) (apiv2.Code, uint32) {
 	return apiv2.ExecuteSuccess, realCounterKey
 }
 
-// 获取限流配额
+// AcquireQuota 获取限流配额
 func (s *Server) AcquireQuota(client Client, startTimeMicro int64, request *apiv2.RateLimitReportRequest,
 	collector *plugin.RateLimitStatCollectorV2) (*apiv2.TimedRateLimitReportResponse, CounterV2) {
 	resp := CheckRateLimitReportRequest(request)

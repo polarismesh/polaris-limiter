@@ -19,22 +19,22 @@ package utils
 
 import "github.com/golang/protobuf/ptypes/wrappers"
 
-// uint32
+// WrapperUint32 uint32
 func WrapperUint32(value uint32) *wrappers.UInt32Value {
 	return &wrappers.UInt32Value{Value: value}
 }
 
-// string
+// WrapperString string
 func WrapperString(value string) *wrappers.StringValue {
 	return &wrappers.StringValue{Value: value}
 }
 
-// int64
+// WrapperInt64 int64
 func WrapperInt64(value int64) *wrappers.Int64Value {
 	return &wrappers.Int64Value{Value: value}
 }
 
-// bool
+// WrapperBool bool
 func WrapperBool(value bool) *wrappers.BoolValue {
 	return &wrappers.BoolValue{Value: value}
 }

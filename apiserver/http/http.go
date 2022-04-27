@@ -31,14 +31,14 @@ import (
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
-// http请求封装器
+// Handler http请求封装器
 type Handler struct {
 	req *restful.Request
 	rsp *restful.Response
 	ctx context.Context
 }
 
-// 解析请求proto
+// ParseProto 解析请求proto
 func (h *Handler) ParseProto(obj proto.Message) error {
 	ctx := requestCtx(h.req)
 	h.ctx = ctx
@@ -50,7 +50,7 @@ func (h *Handler) ParseProto(obj proto.Message) error {
 	return nil
 }
 
-// 回复proto
+// ResponseProto 回复proto
 func (h *Handler) ResponseProto(code api.Code, obj proto.Message) {
 	if obj == nil {
 		h.rsp.WriteHeader(http.StatusOK)
@@ -68,8 +68,6 @@ func (h *Handler) ResponseProto(code api.Code, obj proto.Message) {
 		log.Error(err.Error(), utils.ZapRequestID(h.ctx))
 		return
 	}
-
-	return
 }
 
 // 从request构造ctx
@@ -85,7 +83,5 @@ func requestCtx(req *restful.Request) context.Context {
 	if len(addrSlice) == 2 {
 		ctx = utils.WithClientIP(ctx, addrSlice[0])
 	}
-
 	return ctx
-
 }

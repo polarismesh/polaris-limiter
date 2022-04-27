@@ -25,11 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/metadata"
-
 	"github.com/golang/protobuf/ptypes/wrappers"
-
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/polarismesh/polaris-limiter/apiserver"
 	polaris "github.com/polarismesh/polaris-limiter/pkg/api/polaris/v1"
@@ -37,8 +35,8 @@ import (
 	"github.com/polarismesh/polaris-limiter/pkg/version"
 )
 
-//心跳上报周期
 const (
+	// 心跳上报周期
 	serverTtl = 5 * time.Second
 	// 需要发往服务端的请求跟踪标识
 	headerRequestID = "request-id"
@@ -55,7 +53,7 @@ var (
 	polarisToken         string
 )
 
-//初始化客户端SDK
+// 初始化客户端SDK
 func initPolarisClient(registryCfg *Registry) (err error) {
 	polarisServerAddress = registryCfg.PolarisServerAddress
 	polarisToken = registryCfg.Token
@@ -65,7 +63,7 @@ func initPolarisClient(registryCfg *Registry) (err error) {
 	return nil
 }
 
-//启动心跳上报
+// 启动心跳上报
 func startHeartbeat(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(serverTtl)
@@ -81,9 +79,9 @@ func startHeartbeat(ctx context.Context) {
 				}
 				_ = doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
 					for _, instance := range registerInstances {
+						instance := instance
 						heartbeat := func() error {
-							reqId := fmt.Sprintf(
-								"%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
+							reqId := fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
 							clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
 							defer cancel()
 							_, err := client.Heartbeat(clientCtx, instance)
@@ -116,7 +114,7 @@ func doWithPolarisClient(handle func(polaris.PolarisGRPCClient) error) error {
 	return handle(client)
 }
 
-//创建服务注册请求
+// 创建服务注册请求
 func buildRegisterRequest(cfg *Registry, server apiserver.APIServer, serverAddress string) *polaris.Instance {
 	instance := &polaris.Instance{}
 	instance.Namespace = &wrappers.StringValue{Value: cfg.Namespace}
@@ -137,7 +135,7 @@ func buildRegisterRequest(cfg *Registry, server apiserver.APIServer, serverAddre
 	return instance
 }
 
-// 创建传输grpc头的valueContext
+// CreateHeaderContextWithReqId 创建传输grpc头的valueContext
 func CreateHeaderContextWithReqId(timeout time.Duration, reqID string) (context.Context, context.CancelFunc) {
 	md := metadata.New(map[string]string{headerRequestID: reqID})
 	var ctx context.Context
@@ -162,18 +160,17 @@ func selfRegister(cfg *Registry, servers []apiserver.APIServer, serverAddress st
 	var heartbeatInstances = make([]*polaris.Instance, 0, len(servers))
 	err := doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
 		for _, instance := range instances {
+			instance := instance
 			register := func() error {
 				reqId := fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
 				clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
 				defer cancel()
 				resp, err := client.RegisterInstance(clientCtx, instance)
 				if nil != err {
-					log.Infof("[Bootstrap] fail to register instance %d:%s, err: %s",
-						instance.GetHost().GetValue(), instance.GetPort().GetValue(), err)
+					log.Infof("[Bootstrap] fail to register instance %d:%s, err: %s", instance.GetHost().GetValue(), instance.GetPort().GetValue(), err)
 					return err
 				}
-				log.Infof("[Bootstrap] instance %s:%d registered, code %d",
-					instance.GetHost().GetValue(), instance.GetPort().GetValue(), resp.GetCode().GetValue())
+				log.Infof("[Bootstrap] instance %s:%d registered, code %d", instance.GetHost().GetValue(), instance.GetPort().GetValue(), resp.GetCode().GetValue())
 				hbInstance := &polaris.Instance{
 					Id:           &wrappers.StringValue{Value: resp.GetInstance().GetId().GetValue()},
 					Namespace:    instance.GetNamespace(),
@@ -206,6 +203,7 @@ func selfDeregister() error {
 	}
 	return doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
 		for _, instance := range registerInstances {
+			instance := instance
 			deregister := func() error {
 				reqId := fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
 				clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
@@ -215,8 +213,7 @@ func selfDeregister() error {
 					log.Errorf("[Bootstrap] fail to deregister instance err: %s", err.Error())
 					return err
 				}
-				log.Infof("[Bootstrap] success to deregister instance %s:%d, code %d",
-					instance.GetHost().GetValue(), instance.GetPort().GetValue(), resp.GetCode().GetValue())
+				log.Infof("[Bootstrap] success to deregister instance %s:%d, code %d", instance.GetHost().GetValue(), instance.GetPort().GetValue(), resp.GetCode().GetValue())
 				return nil
 			}
 			_ = deregister()
@@ -225,7 +222,7 @@ func selfDeregister() error {
 	})
 }
 
-// 获取本地IP地址
+// GetLocalHost 获取本地IP地址
 func GetLocalHost(probeAddr string) (string, error) {
 	conn, err := net.Dial("tcp", probeAddr)
 	if err != nil {

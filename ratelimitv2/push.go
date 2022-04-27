@@ -24,32 +24,32 @@ import (
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 )
 
-//推送管理器
+// PushManager 推送管理器
 type PushManager interface {
-	//启动push线程
+	// Run 启动push线程
 	Run(ctx context.Context)
-	//准备推送
+	// Schedule 准备推送
 	Schedule(value *PushValue)
 }
 
-//推送的值
+// PushValue 推送的值
 type PushValue struct {
-	Counter        CounterV2
-	Msg            *apiv2.RateLimitResponse
-	ExcludeClient  string
-	//请求进入时间
+	Counter       CounterV2
+	Msg           *apiv2.RateLimitResponse
+	ExcludeClient string
+	// StartTimeMicro 请求进入时间
 	StartTimeMicro int64
-	//应答生成时间
-	MsgTimeMicro   int64
+	// MsgTimeMicro 应答生成时间
+	MsgTimeMicro int64
 }
 
-//推送管理器实现
+// 推送管理器实现
 type pushManager struct {
 	workerCount  int
 	pushChannels []chan PushValue
 }
 
-//创建推送管理器
+// NewPushManager 创建推送管理器
 func NewPushManager(workerCount int, chanSize int) (PushManager, error) {
 	if workerCount == 0 {
 		return nil, errors.New("workerCount should greater than zero")
@@ -64,7 +64,7 @@ func NewPushManager(workerCount int, chanSize int) (PushManager, error) {
 	return pm, nil
 }
 
-//启动push线程
+// Run 启动push线程
 func (p *pushManager) Run(ctx context.Context) {
 	for i := 0; i < p.workerCount; i++ {
 		go func(idx int) {
@@ -80,11 +80,11 @@ func (p *pushManager) Run(ctx context.Context) {
 	}
 }
 
-//准备推送
+// Schedule 准备推送
 func (p *pushManager) Schedule(pushValue *PushValue) {
 	startIdx := int(pushValue.Counter.CounterKey()) % p.workerCount
 	for i := 0; i < p.workerCount; i++ {
-		//轮询并获取所有的推送管道
+		// 轮询并获取所有的推送管道
 		pushChannel := p.pushChannels[(startIdx+i)%p.workerCount]
 		select {
 		case pushChannel <- *pushValue:

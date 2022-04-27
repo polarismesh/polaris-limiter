@@ -27,7 +27,7 @@ import (
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 )
 
-// http server
+// Server http server
 type Server struct {
 	ip      string
 	port    uint32
@@ -35,14 +35,14 @@ type Server struct {
 	handler *restful.Container
 }
 
-// subInitialize
+// Initialize subInitialize
 func (h *Server) Initialize(option map[string]interface{}) error {
 	h.ip = option["ip"].(string)
 	h.port = uint32(option["port"].(int))
 	return nil
 }
 
-// Run
+// Run running
 func (h *Server) Run(errCh chan error) {
 	address := fmt.Sprintf("%s:%d", h.ip, h.port)
 	listener, err := net.Listen("tcp", address)
@@ -63,19 +63,19 @@ func (h *Server) Run(errCh chan error) {
 	}
 }
 
-// Stop
+// Stop server
 func (h *Server) Stop() {
 	if h.server != nil {
 		_ = h.server.Close()
 	}
 }
 
-// GetProtocol
+// GetProtocol get protocol
 func (h *Server) GetProtocol() string {
 	return "http"
 }
 
-// GetPort
+// GetPort 	get port
 func (h *Server) GetPort() uint32 {
 	return h.port
 }

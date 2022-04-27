@@ -29,7 +29,7 @@ import (
 	"github.com/polarismesh/polaris-limiter/ratelimitv2"
 )
 
-// grpc server
+// Server grpc server
 type Server struct {
 	IP                 string
 	Port               uint32
@@ -37,24 +37,24 @@ type Server struct {
 	rateLimitServiceV2 *RateLimitServiceV2
 }
 
-// 初始化函数
+// Initialize 初始化函数
 func (g *Server) Initialize(option map[string]interface{}) error {
 	g.IP = option["ip"].(string)
 	g.Port = uint32(option["port"].(int))
 	return nil
 }
 
-// 返回协议
+// GetProtocol 返回协议
 func (g *Server) GetProtocol() string {
 	return "grpc"
 }
 
-// 返回port
+// GetPort 返回port
 func (g *Server) GetPort() uint32 {
 	return g.Port
 }
 
-// 入口函数
+// Run 入口函数
 func (g *Server) Run(errCh chan error) {
 	// 初始化grpc server监听listener
 	address := fmt.Sprintf("%s:%d", g.IP, g.Port)
@@ -104,7 +104,7 @@ func (g *Server) Run(errCh chan error) {
 	}
 }
 
-// 停止
+// Stop 停止
 func (g *Server) Stop() {
 	if g.server != nil {
 		g.server.Stop()

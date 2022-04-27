@@ -20,10 +20,11 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
-	. "github.com/smartystreets/goconvey/convey"
 	"strings"
 	"testing"
 	"time"
+
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 // 测试自定义Duration的序列化与反序列化
@@ -45,7 +46,7 @@ func TestMarshal(t *testing.T) {
 	})
 }
 
-//测试标签解析
+// 测试标签解析
 func TestParseLabels(t *testing.T) {
 	var composedLabels string
 	var subLabels *SubLabels

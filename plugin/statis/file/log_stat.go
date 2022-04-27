@@ -20,14 +20,16 @@ package file
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/polarismesh/polaris-limiter/pkg/log"
-	"github.com/polarismesh/polaris-limiter/pkg/utils"
-	"github.com/polarismesh/polaris-limiter/plugin"
+	"sync"
+
 	"github.com/modern-go/reflect2"
 	"github.com/natefinch/lumberjack"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"sync"
+
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/pkg/utils"
+	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
 const (
@@ -36,10 +38,10 @@ const (
 	logReportLogMaxAge  = 10
 )
 
-//日志上报的池化值
+// 日志上报的池化值
 var logStatValuePool = &sync.Pool{}
 
-//从池中获取上报值对象
+// PoolGetLogStatValue 从池中获取上报值对象
 func PoolGetLogStatValue() *LogStatValue {
 	value := logStatValuePool.Get()
 	if !reflect2.IsNil(value) {
@@ -48,12 +50,12 @@ func PoolGetLogStatValue() *LogStatValue {
 	return &LogStatValue{}
 }
 
-//对象重新入池
+// PoolPutLogStatValue 对象重新入池
 func PoolPutLogStatValue(value *LogStatValue) {
 	logStatValuePool.Put(value)
 }
 
-//日志上报的Key
+// LogStatKey 日志上报的Key
 type LogStatKey struct {
 	Namespace string `json:"namespace"`
 	Service   string `json:"service"`
@@ -64,13 +66,13 @@ type LogStatKey struct {
 	Duration  int64  `json:"duration"`
 }
 
-//ToString方法
+// String ToString方法
 func (s LogStatKey) String() string {
 	return fmt.Sprintf(
 		"namespace=%s&service=%s&labels=%s", s.Namespace, s.Service, s.Labels)
 }
 
-//日志总体统计内容
+// LogStatValue 日志总体统计内容
 type LogStatValue struct {
 	LogStatKey
 	Passed     int64  `json:"passed"`
@@ -80,19 +82,19 @@ type LogStatValue struct {
 	TimeStr    string `json:"time_str"`
 }
 
-//ToString方法
+// String ToString方法
 func (i LogStatValue) String() string {
 	jsonStr, _ := json.Marshal(&i)
 	return string(jsonStr)
 }
 
-//统计日志打印处理器
+// LogStatHandler 统计日志打印处理器
 type LogStatHandler struct {
-	//上报所用的日志输出类
+	// 上报所用的日志输出类
 	reportLogger *zap.Logger
 }
 
-//创建曲线上报系统
+// NewLogStatHandler 创建曲线上报系统
 func NewLogStatHandler(cfg *ReportConfig) *LogStatHandler {
 	reporter := &LogStatHandler{}
 	reporter.initLogger(cfg.RateLimitPrecisionLogPath)
@@ -100,7 +102,7 @@ func NewLogStatHandler(cfg *ReportConfig) *LogStatHandler {
 	return reporter
 }
 
-//初始化日志上报
+// 初始化日志上报
 func (l *LogStatHandler) initLogger(reportLogPath string) {
 	// 日志的encode，不打印日志级别和时间戳
 	encCfg := zapcore.EncoderConfig{
@@ -125,7 +127,7 @@ func (l *LogStatHandler) initLogger(reportLogPath string) {
 	l.reportLogger = logger
 }
 
-//打印精度上报记录
+// LogPrecisionRecord 打印精度上报记录
 func (l *LogStatHandler) LogPrecisionRecord(values map[interface{}]plugin.RateLimitStatValue) int {
 	if len(values) == 0 {
 		return 0
@@ -135,7 +137,7 @@ func (l *LogStatHandler) LogPrecisionRecord(values map[interface{}]plugin.RateLi
 		rateLimitData := value.GetPrecisionData()
 		limited := rateLimitData.GetLimited()
 		if limited == 0 {
-			//没有发生限流，则不打印精度日志
+			// 没有发生限流，则不打印精度日志
 			continue
 		}
 		total++

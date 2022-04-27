@@ -22,15 +22,15 @@ import (
 	"net"
 )
 
-//IP地址
+// IPAddress IP地址
 type IPAddress struct {
-	//低位, 0-7
+	// 低位, 0-7
 	LowValue uint64
-	//高位, 8-15
+	// 高位, 8-15
 	HighValue uint64
 }
 
-//创建IP地址数据
+// NewIPAddress 创建IP地址数据
 func NewIPAddress(addr string) *IPAddress {
 	ipAddr := &IPAddress{}
 	ip := net.ParseIP(addr)
@@ -43,7 +43,7 @@ func NewIPAddress(addr string) *IPAddress {
 	return ipAddr
 }
 
-//转成字符串输出
+// 转成字符串输出
 func (addr IPAddress) String() string {
 	ip := make(net.IP, net.IPv6len)
 	mid := net.IPv6len / 2

@@ -21,10 +21,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"google.golang.org/grpc"
 	"log"
 	"math"
 	"time"
+
+	"google.golang.org/grpc"
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
@@ -32,24 +33,23 @@ import (
 
 var (
 	serverAddress string
-	times int
-
+	times         int
 )
 
-//初始化
+// 初始化
 func initArgs() {
 	flag.StringVar(&serverAddress, "server_address", "", "limit server address")
 	flag.IntVar(&times, "times", 10, "test times")
 }
 
-//测试时间同步
+// 测试时间同步
 func main() {
 	initArgs()
 	flag.Parse()
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure())
 	opts = append(opts, grpc.WithBlock())
-	ctx, cancel := context.WithTimeout(context.Background(), 1 *time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	conn, err := grpc.DialContext(ctx, serverAddress, opts...)
 	if nil != err {
@@ -69,11 +69,10 @@ func main() {
 		}
 		endTime := utils.CurrentMillisecond()
 		curDiffRound := math.Abs(float64(servTime.ServerTimestamp - startTime + (endTime - servTime.ServerTimestamp)))
-		curDiff := curDiffRound/2
+		curDiff := curDiffRound / 2
 		fmt.Printf("diff is %.2f for round %d\n", curDiff, i)
 		totalDiffs = append(totalDiffs, curDiff)
 		allTotal += curDiff
 	}
 	fmt.Printf("avg diff is %.2f\n", allTotal/float64(times))
 }
-

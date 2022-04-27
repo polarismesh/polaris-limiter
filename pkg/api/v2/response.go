@@ -21,19 +21,19 @@ import (
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
-//带上精准时间戳的上报消息
+// 带上精准时间戳的上报消息
 type TimedRateLimitReportResponse struct {
 	RateLimitReportResponse
-	//创建时间，精度为微秒
+	// 创建时间，精度为微秒
 	createTimeMicro int64
 }
 
-//转换为真实的上报请求
+// 转换为真实的上报请求
 func (t *TimedRateLimitReportResponse) ToRateLimitReportResponse() *RateLimitReportResponse {
 	return &t.RateLimitReportResponse
 }
 
-//获取创建时间
+// 获取创建时间
 func (t *TimedRateLimitReportResponse) CreateTimeMicro() int64 {
 	return t.createTimeMicro
 }

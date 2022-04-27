@@ -18,31 +18,33 @@
 package file
 
 import (
+	"sync"
+
+	"go.uber.org/zap"
+
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/plugin"
-	"go.uber.org/zap"
-	"sync"
 )
 
-//事件日志上报器
+// EventLogReporter 事件日志上报器
 type EventLogReporter struct {
 	collection *sync.Map
 	logger     *zap.Logger
 }
 
-//创建对象
+// NewEventLogReporter 创建对象
 func NewEventLogReporter(cfg *ReportConfig) *EventLogReporter {
 	return &EventLogReporter{collection: &sync.Map{},
 		logger: initLogger(cfg.RateLimitEventLogPath, cfg.LogSize, cfg.LogBackups, cfg.LogMaxAge)}
 }
 
-//事件收集器
+// EventQueue 事件收集器
 type EventQueue struct {
 	mutex sync.Mutex
 	queue []plugin.EventToLog
 }
 
-//写入事件
+// AddEvent 写入事件
 func (e *EventLogReporter) AddEvent(event plugin.EventToLog) {
 	var eventQueue *EventQueue
 	value, ok := e.collection.Load(event.GetEventType())
@@ -57,7 +59,7 @@ func (e *EventLogReporter) AddEvent(event plugin.EventToLog) {
 	eventQueue.queue = append(eventQueue.queue, event)
 }
 
-//获取所有的事件日志
+// LogAllEvents 获取所有的事件日志
 func (e *EventLogReporter) LogAllEvents() int {
 	eventToLogs := make(map[string][]plugin.EventToLog)
 	e.collection.Range(func(key, value interface{}) bool {

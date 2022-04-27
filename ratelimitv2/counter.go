@@ -28,10 +28,10 @@ import (
 	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
-//默认为批量抢占模式
+// defaultMode 默认为批量抢占模式
 const defaultMode = apiv2.Mode_BATCH_OCCUPY
 
-//初始化请求
+// InitRequest 初始化请求
 type InitRequest struct {
 	MaxAmount      uint32
 	SlideCount     int
@@ -42,70 +42,70 @@ type InitRequest struct {
 	PushManager    PushManager
 }
 
-//计数器
+// CounterV2 计数器
 type CounterV2 interface {
-	//获取标识
+	// CounterKey 获取标识
 	CounterKey() uint32
-	//计数器标识
+	// Identifier 计数器标识
 	Identifier() *CounterIdentifier
-	//刷新配额值
+	// Reload 刷新配额值
 	Reload(InitRequest)
-	//原子增加
+	// AcquireQuota 原子增加
 	AcquireQuota(client Client, quotaSum *apiv2.QuotaSum,
 		nowMs int64, startMicro int64, collector *plugin.RateLimitStatCollectorV2) *apiv2.QuotaLeft
-	//获取当前quota总量
+	// SumQuota 获取当前quota总量
 	SumQuota(client Client, timestampMs int64) *apiv2.QuotaLeft
-	//是否已过期
+	// IsExpired 是否已过期
 	IsExpired() bool
-	//推送消息
+	// PushMessage 推送消息
 	PushMessage(*PushValue)
-	//过期周期
+	// ExpireDuration 过期周期
 	ExpireDuration() time.Duration
-	//最后一次更新时间
+	// LastUpdateTime 最后一次更新时间
 	LastUpdateTime() int64
-	//更新时间戳
+	// Update 更新时间戳
 	Update()
-	//配额分配模式
+	// Mode 配额分配模式
 	Mode() apiv2.Mode
-	//最大配额数
+	// MaxAmount 最大配额数
 	MaxAmount() uint32
-	//客户端数量
+	// ClientCount 客户端数量
 	ClientCount() uint32
-	//删除客户端
+	// DelSender 删除客户端
 	DelSender(sender Client, expired bool)
-	//清理没用的客户端
+	// CleanupSenders 清理没用的客户端
 	CleanupSenders(bool)
-	//更新对应客户端最近一次发送时间
+	// UpdateClientSendTime 更新对应客户端最近一次发送时间
 	UpdateClientSendTime(sender Client, sendTimeMicro int64)
 }
 
-//计算器管理的客户端数据结构
+// CounterClients 计算器管理的客户端数据结构
 type CounterClients struct {
-	//同步锁
+	// 同步锁
 	mutex *sync.Mutex
-	//订阅该key的客户端，key是clientKey, value是client对象
+	// 订阅该key的客户端，key是clientKey, value是client对象
 	clientSenders *sync.Map
-	//客户端主键，clientId <--> clientKey
+	// 客户端主键，clientId <--> clientKey
 	clientIds map[string]map[uint32]bool
-	//客户端数量缓存
+	// 客户端数量缓存
 	clientCount uint32
 }
 
-//初始化
+// Init 初始化
 func (cc *CounterClients) Init() {
 	cc.mutex = &sync.Mutex{}
 	cc.clientSenders = &sync.Map{}
 	cc.clientIds = make(map[string]map[uint32]bool)
 }
 
-//增加调用者
+// AddSender 增加调用者
 func (cc *CounterClients) AddSender(sender Client, counter *counterV2) {
 	cc.mutex.Lock()
 	defer cc.mutex.Unlock()
 	curTime := utils.CurrentMillisecond()
-	//上报
+	// 上报
 	timeStr := utils.TimestampMsToUtcIso8601(curTime)
-	//需要更新sender
+	// 需要更新sender
 	cc.clientSenders.Store(sender.ClientKey(), &ClientSendTime{
 		curClient: sender,
 	})
@@ -117,7 +117,7 @@ func (cc *CounterClients) AddSender(sender Client, counter *counterV2) {
 	}
 	clientCount := uint32(len(cc.clientIds))
 	if !ok {
-		//记录客户端新增事件
+		// 记录客户端新增事件
 		clientEvent := &CounterClientUpdateEvent{
 			TimeNumber:  timeStr,
 			EventType:   EventTypeCounterClientUpdate,
@@ -136,24 +136,24 @@ func (cc *CounterClients) AddSender(sender Client, counter *counterV2) {
 	counter.reloadMaxAmount(timeStr, clientCount, sender.ClientId())
 }
 
-//获取客户端数量快照
+// ClientCount 获取客户端数量快照
 func (cc *CounterClients) ClientCount() uint32 {
 	return atomic.LoadUint32(&cc.clientCount)
 }
 
-//删除调用者
+// DelSender 删除调用者
 func (cc *CounterClients) DelSender(sender Client, counter *counterV2, counterExpired bool) {
 	cc.mutex.Lock()
 	defer cc.mutex.Unlock()
 	timeStr := utils.TimestampMsToUtcIso8601(utils.CurrentMillisecond())
 	clientKeys, ok := cc.clientIds[sender.ClientId()]
 	if !ok {
-		//已经不存在或者已经被置换，则不进行删除，一般不会出现
+		// 已经不存在或者已经被置换，则不进行删除，一般不会出现
 		log.Warnf("[RateLimit]clientId %s not exist when del sender %s", sender.ClientId(), sender.ClientKey())
 		return
 	}
 	if !counterExpired && !sender.IsDetached() {
-		//未过期的客户端，而且未被解引用，不删除
+		// 未过期的客户端，而且未被解引用，不删除
 		return
 	}
 	cc.clientSenders.Delete(sender.ClientKey())
@@ -164,7 +164,7 @@ func (cc *CounterClients) DelSender(sender Client, counter *counterV2, counterEx
 	clientCount := uint32(len(cc.clientIds))
 	lastClientCount := atomic.SwapUint32(&cc.clientCount, clientCount)
 	if clientCount != lastClientCount {
-		//上报
+		// 上报
 		clientEvent := &CounterClientUpdateEvent{
 			TimeNumber:  timeStr,
 			EventType:   EventTypeCounterClientUpdate,
@@ -182,35 +182,35 @@ func (cc *CounterClients) DelSender(sender Client, counter *counterV2, counterEx
 	}
 }
 
-//计数器实现
+// 计数器实现
 type counterV2 struct {
-	//计数器的唯一标识
+	// 计数器的唯一标识
 	identifier *CounterIdentifier
-	//用于上报解析的字段信息
+	// 用于上报解析的字段信息
 	subLabels *utils.SubLabels
-	//计数器的整数标识
+	// 计数器的整数标识
 	counterKey uint32
-	//计数器的度量周期
+	// 计数器的度量周期
 	duration time.Duration
-	//超时周期
+	// 超时周期
 	expireDurationMilli int64
-	//最后一次更新时间
+	// 最后一次更新时间
 	lastMTimeMilli int64
-	//规则中设置的最大配额
+	// 规则中设置的最大配额
 	ruleMaxAmount uint32
-	//实际生效的最大配额
+	// 实际生效的最大配额
 	maxAmount uint32
-	//阈值模式，全局模式还是单机均摊模式
+	// 阈值模式，全局模式还是单机均摊模式
 	amountMode int32
-	//配额已经用完
+	// 配额已经用完
 	quotaUsedOff uint32
-	//配额分配器
+	// 配额分配器
 	allocator QuotaAllocator
-	//计数器客户端集合
+	// 计数器客户端集合
 	counterClients CounterClients
 }
 
-//创建计数器
+// NewCounterV2 创建计数器
 func NewCounterV2(counterKey uint32, identifier *CounterIdentifier, initRequest InitRequest) CounterV2 {
 	counter := &counterV2{
 		identifier: identifier,
@@ -223,7 +223,7 @@ func NewCounterV2(counterKey uint32, identifier *CounterIdentifier, initRequest 
 	return counter
 }
 
-//初始化Counter
+// Init 初始化Counter
 func (c *counterV2) Init(initRequest InitRequest) {
 	c.ruleMaxAmount = initRequest.MaxAmount
 	c.lastMTimeMilli = utils.CurrentMillisecond()
@@ -232,7 +232,7 @@ func (c *counterV2) Init(initRequest InitRequest) {
 	c.amountMode = int32(initRequest.AmountMode)
 	c.counterClients.AddSender(initRequest.Sender, c)
 	c.allocator = NewOccupyAllocator(initRequest.SlideCount, int(c.duration.Milliseconds()), initRequest.PushManager, c)
-	//上报
+	// 上报
 	counterEvent := &CounterUpdateEvent{
 		TimeNumber: utils.TimestampMsToUtcIso8601(c.LastUpdateTime()),
 		EventType:  EventTypeCounterUpdate,
@@ -246,27 +246,27 @@ func (c *counterV2) Init(initRequest InitRequest) {
 	statics.AddEventToLog(counterEvent)
 }
 
-//过期周期
+// ExpireDuration 过期周期
 func (c *counterV2) ExpireDuration() time.Duration {
 	return time.Duration(c.expireDurationMilli) * time.Millisecond
 }
 
-//最后一次更新时间
+// LastUpdateTime 最后一次更新时间
 func (c *counterV2) LastUpdateTime() int64 {
 	return atomic.LoadInt64(&c.lastMTimeMilli)
 }
 
-//配额分配模式
+// Mode 配额分配模式
 func (c *counterV2) Mode() apiv2.Mode {
 	return defaultMode
 }
 
-//最大配额数
+// MaxAmount 最大配额数
 func (c *counterV2) MaxAmount() uint32 {
 	return atomic.LoadUint32(&c.maxAmount)
 }
 
-//刷新配额值
+// Reload 刷新配额值
 func (c *counterV2) Reload(initRequest InitRequest) {
 	atomic.StoreUint32(&c.ruleMaxAmount, initRequest.MaxAmount)
 	atomic.StoreInt64(&c.expireDurationMilli, initRequest.ExpireDuration.Milliseconds())
@@ -277,17 +277,17 @@ func (c *counterV2) Reload(initRequest InitRequest) {
 	c.counterClients.AddSender(initRequest.Sender, c)
 }
 
-//更新时间戳
+// Update 更新时间戳
 func (c *counterV2) Update() {
 	atomic.StoreInt64(&c.lastMTimeMilli, utils.CurrentMillisecond())
 }
 
-//删除客户端
+// DelSender 删除客户端
 func (c *counterV2) DelSender(sender Client, counterExpired bool) {
 	c.counterClients.DelSender(sender, c, counterExpired)
 }
 
-//counter下线，清空所有的客户端
+// CleanupSenders counter下线，清空所有的客户端
 func (c *counterV2) CleanupSenders(expired bool) {
 	c.counterClients.clientSenders.Range(func(key, value interface{}) bool {
 		sender := value.(*ClientSendTime).curClient
@@ -296,24 +296,24 @@ func (c *counterV2) CleanupSenders(expired bool) {
 	})
 }
 
-//更新客户端发送时间
+// UpdateClientSendTime 更新客户端发送时间
 func (c *counterV2) UpdateClientSendTime(sender Client, sendTimeMicro int64) {
 	value, ok := c.counterClients.clientSenders.Load(sender.ClientKey())
 	if !ok {
 		return
 	}
 	clientSendTime := value.(*ClientSendTime)
-	//这个时间只影响推送，所以不保证原子性也影响不大
+	// 这个时间只影响推送，所以不保证原子性也影响不大
 	clientSendTime.UpdateLastSendTime(sendTimeMicro)
 }
 
-//超时
+// IsExpired 超时
 func (c *counterV2) IsExpired() bool {
 	timePassed := utils.CurrentMillisecond() - atomic.LoadInt64(&c.lastMTimeMilli)
 	return timePassed > atomic.LoadInt64(&c.expireDurationMilli)
 }
 
-//超时
+// AcquireQuota 获取超时配额
 func (c *counterV2) AcquireQuota(client Client, quotaSum *apiv2.QuotaSum,
 	timestampMs int64, startTimeMicro int64, collector *plugin.RateLimitStatCollectorV2) *apiv2.QuotaLeft {
 	sumUsed := quotaSum.GetUsed()
@@ -322,47 +322,47 @@ func (c *counterV2) AcquireQuota(client Client, quotaSum *apiv2.QuotaSum,
 	return c.allocator.Allocate(client, quotaSum, timestampMs, startTimeMicro)
 }
 
-//超时
+// SumQuota 汇总超时
 func (c *counterV2) SumQuota(client Client, timestampMs int64) *apiv2.QuotaLeft {
-	//更新客户端时间戳
+	// 更新客户端时间戳
 	return c.allocator.Allocate(client, &apiv2.QuotaSum{
 		CounterKey: c.counterKey,
 		Used:       0,
 		Limited:    0,
-	}, timestampMs, timestampMs * 1e3)
+	}, timestampMs, timestampMs*1e3)
 }
 
-//获取标识
+// CounterKey 获取标识
 func (c *counterV2) CounterKey() uint32 {
 	return c.counterKey
 }
 
-//计数器标识
+// Identifier 计数器标识
 func (c *counterV2) Identifier() *CounterIdentifier {
 	return c.identifier
 }
 
-//重新计算配额值
+// 重新计算配额值
 func (c *counterV2) reloadMaxAmount(timeStr string, clientCount uint32, clientId string) {
 	ruleMaxAmount := atomic.LoadUint32(&c.ruleMaxAmount)
 	amountMode := atomic.LoadInt32(&c.amountMode)
 	var action string
 	var curMaxAmount uint32
 	if amountMode != int32(apiv2.QuotaMode_DIVIDE) {
-		//全局配额模式
+		// 全局配额模式
 		action = TriggerShareGlobal
 		curMaxAmount = ruleMaxAmount
 	} else {
-		//单机均摊模式
+		// 单机均摊模式
 		action = TriggerShareEqually
 		curMaxAmount = clientCount * ruleMaxAmount
 	}
 	lastMaxAmount := atomic.SwapUint32(&c.maxAmount, curMaxAmount)
-	//if lastMaxAmount == curMaxAmount {
+	// if lastMaxAmount == curMaxAmount {
 	//	//没有发生变化，则不上报日志
 	//	return
-	//}
-	//上报
+	// }
+	// 上报
 	clientEvent := &QuotaChangeEvent{
 		TimeNumber:    timeStr,
 		EventType:     EventTypeQuotaChange,
@@ -378,7 +378,7 @@ func (c *counterV2) reloadMaxAmount(timeStr string, clientCount uint32, clientId
 	statics.AddEventToLog(clientEvent)
 }
 
-//推送消息
+// PushMessage 推送消息
 func (c *counterV2) PushMessage(pushValue *PushValue) {
 	c.counterClients.clientSenders.Range(func(key, value interface{}) bool {
 		clientSendTime := value.(*ClientSendTime)
@@ -396,7 +396,7 @@ func (c *counterV2) PushMessage(pushValue *PushValue) {
 		if !sent {
 			return true
 		}
-		//执行上报
+		// 执行上报
 		apiCallStatValue := plugin.PoolGetAPICallStatValueImpl()
 		apiCallStatValue.StatKey.APIKey = plugin.AcquireQuotaV2
 		apiCallStatValue.StatKey.Code = apiv2.GetErrorCode(pushValue.Msg)
@@ -410,7 +410,7 @@ func (c *counterV2) PushMessage(pushValue *PushValue) {
 	})
 }
 
-//加入上报队列
+// 加入上报队列
 func (c *counterV2) doQuotaStatReport(startTimeMicro int64,
 	passed uint32, limited uint32, client Client, collector *plugin.RateLimitStatCollectorV2) {
 	startTimeMilli := startTimeMicro / 1e3
@@ -435,7 +435,7 @@ func (c *counterV2) doQuotaStatReport(startTimeMicro int64,
 	}
 }
 
-//客户端数量
+// ClientCount 客户端数量
 func (c *counterV2) ClientCount() uint32 {
 	return c.counterClients.ClientCount()
 }

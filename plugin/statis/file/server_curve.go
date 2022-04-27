@@ -28,18 +28,18 @@ import (
 	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
-//限流曲线上报
+// ServerCurveReporter 限流曲线上报
 type ServerCurveReporter struct {
 	mutex *sync.Mutex
-	//收集的数据
+	// 收集的数据
 	collections *sync.Map
-	//曲线上报的时间间隔
+	// 曲线上报的时间间隔
 	interval time.Duration
-	//上报监控的应用名
+	// 上报监控的应用名
 	appName string
 }
 
-//创建曲线上报系统
+// NewServerCurveReporter 创建曲线上报系统
 func NewServerCurveReporter(config *ReportConfig) *ServerCurveReporter {
 	reporter := &ServerCurveReporter{}
 	reporter.mutex = &sync.Mutex{}
@@ -50,7 +50,7 @@ func NewServerCurveReporter(config *ReportConfig) *ServerCurveReporter {
 	return reporter
 }
 
-//获取统计窗口
+// 获取统计窗口
 func (s *ServerCurveReporter) getAndCreateStoreValue(
 	curValue plugin.APICallStatValue) (plugin.APICallStatValue, bool) {
 	s.mutex.Lock()
@@ -64,7 +64,7 @@ func (s *ServerCurveReporter) getAndCreateStoreValue(
 	return savedValuePtr, false
 }
 
-//添加增量数据
+// AddIncrement 添加增量数据
 func (s *ServerCurveReporter) AddIncrement(apiCallStatValue plugin.APICallStatValue) {
 	var storeValue plugin.APICallStatValue
 	now := time.Now().UnixNano()
@@ -82,7 +82,7 @@ func (s *ServerCurveReporter) AddIncrement(apiCallStatValue plugin.APICallStatVa
 	storeValue.SetLastUpdateTime(now)
 }
 
-//构建上报记录
+// BuildReportRecord 构建上报记录
 func (s *ServerCurveReporter) BuildReportRecord() *ReportRecord {
 	record := &ReportRecord{
 		AppName: s.appName,
@@ -110,12 +110,14 @@ func (s *ServerCurveReporter) BuildReportRecord() *ReportRecord {
 }
 
 const (
-	ServerTagStrPattern  = "inf=%s&err_code=%d&duration=%s&msg_type=%s&limit_service=%s"
+	// ServerTagStrPattern 标签字符串模板
+	ServerTagStrPattern = "inf=%s&err_code=%d&duration=%s&msg_type=%s&limit_service=%s"
+	// ServerTagValuePatter 数据字符串模板
 	ServerTagValuePatter = "latency.max.interface=%d&latency.avg.interface=%d&count.network_err=%d" +
 		"&count.system_err=%d&count.user_err=%d&count.success=%d&count.total=%d"
 )
 
-//上报的Tag字符串
+// GetTagStr 上报的Tag字符串
 func (s *ServerCurveReporter) GetTagStr(value plugin.APICallStatValue) string {
 	tagBuilder := strings.Builder{}
 	tagBuilder.WriteString(fmt.Sprintf(
@@ -124,7 +126,7 @@ func (s *ServerCurveReporter) GetTagStr(value plugin.APICallStatValue) string {
 	return tagBuilder.String()
 }
 
-//上报的数据值
+// GetValueStr 上报的数据值
 func (s *ServerCurveReporter) GetValueStr(value plugin.APICallStatValue) string {
 	reqCount := value.GetReqCount()
 	value.AddReqCount(0 - reqCount)
@@ -133,10 +135,13 @@ func (s *ServerCurveReporter) GetValueStr(value plugin.APICallStatValue) string 
 	maxLatency := value.GetMaxLatency()
 	value.ResetMaxLatency(maxLatency)
 	latencyAvg := latencyTotal / int64(reqCount)
-	var reqCountNetworkErr int32 = 0
-	var reqCountUserErr int32 = 0
-	var reqCountSysErr int32 = 0
-	var reqCountSuccess int32 = 0
+	var (
+		reqCountNetworkErr int32
+		reqCountUserErr    int32
+		reqCountSysErr     int32
+		reqCountSuccess    int32
+	)
+
 	code := value.GetCode()
 	if utils.IsSuccess(code) {
 		reqCountSuccess = reqCount

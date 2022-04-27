@@ -167,7 +167,7 @@ func prepZap(options *Options) (zapcore.Core, zapcore.Core, zapcore.WriteSyncer,
 }
 
 func formatDate(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
-	//t = t.UTC() 不用utc时间
+	// t = t.UTC() 不用utc时间
 	year, month, day := t.Date()
 	hour, minute, second := t.Clock()
 	micros := t.Nanosecond() / 1000
@@ -327,7 +327,7 @@ func Configure(options *Options) error {
 
 	// capture gRPC logging
 	if options.LogGrpc {
-		grpclog.SetLogger(zapgrpc.NewLogger(captureLogger.WithOptions(zap.AddCallerSkip(2))))
+		grpclog.SetLoggerV2(zapgrpc.NewLogger(captureLogger.WithOptions(zap.AddCallerSkip(2))))
 	}
 
 	return nil

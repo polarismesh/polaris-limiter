@@ -22,9 +22,7 @@ var (
 	BuildDate string
 )
 
-/**
- * @brief 获取版本号
- */
+// Get version 获取版本号
 func Get() string {
 	if Version == "" {
 		return "v0.1.0"
@@ -33,7 +31,7 @@ func Get() string {
 	return Version
 }
 
-// 获取完整版本号信息，包括时间戳的
+// GetRevision 获取完整版本号信息，包括时间戳的
 func GetRevision() string {
 	if Version == "" || BuildDate == "" {
 		return "v0.1.0"

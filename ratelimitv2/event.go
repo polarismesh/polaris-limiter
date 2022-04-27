@@ -19,6 +19,7 @@ package ratelimitv2
 
 import (
 	"encoding/json"
+
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
@@ -36,21 +37,21 @@ const (
 	TriggerShareGlobal           = "shareGlobal"
 )
 
-//客户端更新事件
+// StreamUpdateEvent 客户端更新事件
 type StreamUpdateEvent struct {
-	//时间点
+	// 时间点
 	TimeNumber string `json:"time_number"`
-	//事件类型
+	// 事件类型
 	EventType string `json:"event"`
-	//客户端ID
+	// 客户端ID
 	StreamId string `json:"stream_id"`
-	//IP地址
+	// IP地址
 	IPAddress string `json:"ip_address"`
-	//动作，上线还是下线
+	// 动作，上线还是下线
 	Action string `json:"action"`
 }
 
-//更新客户端事件
+// NewStreamUpdateEvent 更新客户端事件
 func NewStreamUpdateEvent(streamId string, ipAddr *utils.IPAddress, action string) *StreamUpdateEvent {
 	return &StreamUpdateEvent{
 		TimeNumber: utils.TimestampMsToUtcIso8601(utils.CurrentMillisecond()),
@@ -61,41 +62,41 @@ func NewStreamUpdateEvent(streamId string, ipAddr *utils.IPAddress, action strin
 	}
 }
 
-//获取事件类型
+// GetEventType 获取事件类型
 func (c *StreamUpdateEvent) GetEventType() string {
 	return c.EventType
 }
 
-//变成Json输出
+// ToJson 变成Json输出
 func (c *StreamUpdateEvent) ToJson() string {
 	return toJsonStr(c)
 }
 
-//客户端更新事件
+// ClientUpdateEvent 客户端更新事件
 type ClientUpdateEvent struct {
-	//时间点
+	// 时间点
 	TimeNumber string `json:"time_number"`
-	//事件类型
+	// 事件类型
 	EventType string `json:"event"`
-	//客户端ID
+	// 客户端ID
 	ClientId string `json:"client_id"`
-	//IP地址
+	// IP地址
 	IPAddress string `json:"ip_address"`
-	//动作，上线还是下线
+	// 动作，上线还是下线
 	Action string `json:"action"`
 }
 
-//获取事件类型
+// GetEventType 获取事件类型
 func (c *ClientUpdateEvent) GetEventType() string {
 	return c.EventType
 }
 
-//变成Json输出
+// ToJson 变成Json输出
 func (c *ClientUpdateEvent) ToJson() string {
 	return toJsonStr(c)
 }
 
-//更新客户端事件
+// NewClientUpdateEvent 更新客户端事件
 func NewClientUpdateEvent(clientId string, ipAddr *utils.IPAddress, action string) *ClientUpdateEvent {
 	return &ClientUpdateEvent{
 		TimeNumber: utils.TimestampMsToUtcIso8601(utils.CurrentMillisecond()),
@@ -106,35 +107,35 @@ func NewClientUpdateEvent(clientId string, ipAddr *utils.IPAddress, action strin
 	}
 }
 
-//客户端更新事件
+// ClientStreamUpdateEvent 客户端更新事件
 type ClientStreamUpdateEvent struct {
-	//时间点
+	// TimeNumber 时间点
 	TimeNumber string `json:"time_number"`
-	//事件类型
+	// EventType 事件类型
 	EventType string `json:"event"`
-	//最后的流ID
+	// LastStreamId 最后的流ID
 	LastStreamId string `json:"last_stream_id"`
-	//流ID
+	// StreamId 流ID
 	StreamId string `json:"stream_id"`
-	//客户端ID
+	// ClientId 客户端ID
 	ClientId string `json:"client_id"`
-	//IP地址
+	// IPAddress IP地址
 	IPAddress string `json:"ip_address"`
-	//动作，上线还是下线
+	// Action 动作，上线还是下线
 	Action string `json:"action"`
 }
 
-//获取事件类型
+// GetEventType 获取事件类型
 func (c *ClientStreamUpdateEvent) GetEventType() string {
 	return c.EventType
 }
 
-//变成Json输出
+// ToJson 变成Json输出
 func (c *ClientStreamUpdateEvent) ToJson() string {
 	return toJsonStr(c)
 }
 
-//更新客户端事件
+// NewClientStreamUpdateEvent 更新客户端事件
 func NewClientStreamUpdateEvent(
 	lastStreamId string, streamId string, client Client, action string) *ClientStreamUpdateEvent {
 	return &ClientStreamUpdateEvent{
@@ -148,107 +149,106 @@ func NewClientStreamUpdateEvent(
 	}
 }
 
-//客户端更新事件
+// CounterClientUpdateEvent 客户端更新事件
 type CounterClientUpdateEvent struct {
-	//时间点
+	// TimeNumber 时间点
 	TimeNumber string `json:"time_number"`
-	//事件类型
+	// EventType 事件类型
 	EventType string `json:"event"`
-	//命名空间
+	// Namespace 命名空间
 	Namespace string `json:"namespace"`
-	//服务名
+	// Service 服务名
 	Service string `json:"service"`
-	//标签
+	// Labels 标签
 	Labels string `json:"labels"`
-	//时间段
+	// Duration 时间段
 	Duration string `json:"duration"`
-	//客户端ID
+	// ClientId 客户端ID
 	ClientId string `json:"client_id"`
-	//IP地址
+	// IPAddress IP地址
 	IPAddress string `json:"ip_address"`
-	//动作，上线还是下线
+	// Action 动作，上线还是下线
 	Action string `json:"action"`
-	//客户端总数
+	// ClientCount 客户端总数
 	ClientCount int `json:"client_count"`
 }
 
-//获取事件类型
+// GetEventType 获取事件类型
 func (c *CounterClientUpdateEvent) GetEventType() string {
 	return c.EventType
 }
 
-//变成Json输出
+// ToJson 变成Json输出
 func (c *CounterClientUpdateEvent) ToJson() string {
 	return toJsonStr(c)
 }
 
-//变成Json输出
+// 变成Json输出
 func toJsonStr(value interface{}) string {
 	str, _ := json.Marshal(value)
 	return string(str)
 }
 
-//配额变更时间
+// QuotaChangeEvent 配额变更时间
 type QuotaChangeEvent struct {
-	//时间点
+	// TimeNumber 时间点
 	TimeNumber string `json:"time_number"`
-	//事件类型
+	// EventType 事件类型
 	EventType string `json:"event"`
-	//命名空间
+	// Namespace 命名空间
 	Namespace string `json:"namespace"`
-	//服务名
+	// Service 服务名
 	Service string `json:"service"`
-	//标签
+	// Labels 标签
 	Labels string `json:"labels"`
-	//时间段
+	// Duration 时间段
 	Duration string `json:"duration"`
-	//触发配额调整的动作
+	// Action 触发配额调整的动作
 	Action string `json:"action"`
-	//客户端ID
+	// ClientId 客户端ID
 	ClientId string `json:"client_id"`
-	//原来的配额值
+	// LatestAmount 原来的配额值
 	LatestAmount uint32 `json:"latest_amount"`
-	//当前配额值
+	// CurrentAmount 当前配额值
 	CurrentAmount uint32 `json:"current_amount"`
 }
 
-//获取事件类型
+// GetEventType 获取事件类型
 func (q *QuotaChangeEvent) GetEventType() string {
 	return q.EventType
 }
 
-//变成Json输出
+// ToJson 变成Json输出
 func (q *QuotaChangeEvent) ToJson() string {
 	return toJsonStr(q)
 }
 
-//配额变更时间
+// CounterUpdateEvent 配额变更时间
 type CounterUpdateEvent struct {
-	//时间点
+	// TimeNumber 时间点
 	TimeNumber string `json:"time_number"`
-	//事件类型
+	// EventType 事件类型
 	EventType string `json:"event"`
-	//命名空间
+	// Namespace 命名空间
 	Namespace string `json:"namespace"`
-	//服务名
+	// Service 服务名
 	Service string `json:"service"`
-	//标签
+	// Labels 标签
 	Labels string `json:"labels"`
-	//时间段
+	// Duration 时间段
 	Duration string `json:"duration"`
-	//触发配额调整的动作
+	// Action 触发配额调整的动作
 	Action string `json:"action"`
-	//当前配额值
+	// Amount 当前配额值
 	Amount uint32 `json:"amount"`
 }
 
-//获取事件类型
+// GetEventType 获取事件类型
 func (q *CounterUpdateEvent) GetEventType() string {
 	return q.EventType
 }
 
-//变成Json输出
+// ToJson 变成Json输出
 func (q *CounterUpdateEvent) ToJson() string {
 	return toJsonStr(q)
 }
-

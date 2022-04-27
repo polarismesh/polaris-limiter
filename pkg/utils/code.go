@@ -27,17 +27,17 @@ func code2CommonCode(code uint32) int {
 
 }
 
-//是否成功错误码
+// IsSuccess 是否成功错误码
 func IsSuccess(code uint32) bool {
 	return code2CommonCode(code) == 200
 }
 
-//是否成功错误码
+// IsUserErr 是否成功错误码
 func IsUserErr(code uint32) bool {
 	return code2CommonCode(code) == 400
 }
 
-//是否成功错误码
+// IsSysErr 是否成功错误码
 func IsSysErr(code uint32) bool {
 	return code2CommonCode(code) == 500
 }

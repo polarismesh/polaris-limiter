@@ -24,13 +24,13 @@ import (
 )
 
 var (
-	//统一的服务器地址
+	// ServerAddress 统一的服务器地址
 	ServerAddress = "127.0.0.1"
-	//限流集群服务名
+	// LimitServiceName 限流集群服务名
 	LimitServiceName = ""
 )
 
-// 计数器的状态
+// CounterStat 计数器的状态
 type CounterStat struct {
 	Key              string
 	Namespace        string
@@ -44,7 +44,7 @@ type CounterStat struct {
 	RemoteRecordTime int64
 }
 
-// 限制器的状态
+// LimiterStat 限制器的状态
 type LimiterStat struct {
 	Duration  Duration
 	Amount    uint32
@@ -52,7 +52,7 @@ type LimiterStat struct {
 	Cycle     uint64
 }
 
-// 远端的counterStat
+// RemoteCounterStat 远端的counterStat
 type RemoteCounterStat struct {
 	Key          string
 	StartTime    int64
@@ -61,10 +61,10 @@ type RemoteCounterStat struct {
 	SumAmount    uint32
 }
 
-// 自定义Duration
+// Duration 自定义Duration
 type Duration time.Duration
 
-// 实现Unmarshaler
+// UnmarshalJSON 实现Unmarshaler
 func (d *Duration) UnmarshalJSON(b []byte) error {
 	var s string
 	if err := json.Unmarshal(b, &s); err != nil {
@@ -80,13 +80,13 @@ func (d *Duration) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// 实现Marshaler
+// MarshalJSON 实现Marshaler
 func (d Duration) MarshalJSON() ([]byte, error) {
 	s := time.Duration(d).String()
 	return json.Marshal(s)
 }
 
-//复合标签的子标签
+// SubLabels 复合标签的子标签
 type SubLabels struct {
 	Method string
 	AppId  string
@@ -101,7 +101,7 @@ const (
 	uinPrefix    = "uin:"
 )
 
-//把客户端上报的符合字段，解析成多维度的值
+// ParseLabels 把客户端上报的符合字段，解析成多维度的值
 func ParseLabels(composedLabels string) *SubLabels {
 	subLabels := &SubLabels{}
 	items := strings.Split(composedLabels, splitItems)

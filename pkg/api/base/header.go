@@ -18,6 +18,6 @@
 package base
 
 const (
-	//与limit server通信的流，可以带入客户端真实IP，获取到真实IP，则以真实IP为准，否则取TCP连接的IP
+	// HeaderKeyClientIP 与limit server通信的流，可以带入客户端真实IP，获取到真实IP，则以真实IP为准，否则取TCP连接的IP
 	HeaderKeyClientIP = "client-ip"
 )

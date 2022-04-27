@@ -24,13 +24,13 @@ import (
 	"github.com/polarismesh/polaris-limiter/pkg/config"
 )
 
-//默认滑窗数量
+// 默认滑窗数量
 const (
-	//最大滑窗
+	// MaxSlideCount 最大滑窗
 	MaxSlideCount = config.MaxSlideCount
 )
 
-//检查限流上报请求参数
+// CheckRateLimitReportRequest 检查限流上报请求参数
 func CheckRateLimitReportRequest(req *apiv2.RateLimitReportRequest) *apiv2.TimedRateLimitReportResponse {
 	if req.GetClientKey() == 0 {
 		return apiv2.NewRateLimitReportResponse(apiv2.InvalidClientKey)
@@ -82,6 +82,7 @@ func checkInitRequest(
 	return nil, maxDuration
 }
 
+// CheckRateLimitInitRequest 检查限流初始化请求参数
 func CheckRateLimitInitRequest(
 	req *apiv2.RateLimitInitRequest, defaultSlideCount uint32) (*apiv2.RateLimitInitResponse, time.Duration) {
 	if len(req.GetClientId()) == 0 {
@@ -90,6 +91,7 @@ func CheckRateLimitInitRequest(
 	return checkInitRequest(req, defaultSlideCount)
 }
 
+// CheckRateLimitBatchInitRequest 检查限流初始化请求参数
 func CheckRateLimitBatchInitRequest(
 	req *apiv2.RateLimitInitRequest, defaultSlideCount uint32) (*apiv2.RateLimitInitResponse, time.Duration) {
 	if len(req.GetTarget().GetLabelsList()) == 0 {

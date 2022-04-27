@@ -21,14 +21,15 @@ import (
 	"fmt"
 	"os"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/polarismesh/polaris-limiter/apiserver"
 	"github.com/polarismesh/polaris-limiter/pkg/config"
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/plugin"
-	yaml "gopkg.in/yaml.v2"
 )
 
-// 配置类
+// Config 配置类
 type Config struct {
 	Logger     log.Options
 	Registry   Registry           `yaml:"registry"`
@@ -37,7 +38,7 @@ type Config struct {
 	Plugin     plugin.Config      `yaml:"plugin"`
 }
 
-// 自注册配置
+// Registry 自注册配置
 type Registry struct {
 	Enable               bool   `yaml:"enable"`
 	PolarisServerAddress string `yaml:"polaris-server-address"`
