@@ -35,21 +35,6 @@ function start() {
     nohup ./polaris-limiter start >>./log/stdout 2>&1 &
 }
 
-function restart() {
-    log_info "restart $server_name"
-
-    if [ ! -d "./log" ]; then
-        mkdir ./log
-    fi
-
-    if [ ! -d "./statis" ]; then
-        mkdir ./statis
-    fi
-
-    ulimit -n 102400
-    nohup ./polaris-limiter restart >>./log/stdout 2>&1 &
-}
-
 function stop() {
     pids=$(ps -e -o pid,cmd | grep "$cmdline" | grep -v "grep" | awk '{print $1}')
     array=($pids)
@@ -58,31 +43,4 @@ function stop() {
 
         kill -15 $pid
     done
-}
-
-function add_cron() {
-    item="$workdir/tool/check.sh >>$workdir/log/check.log 2>&1"
-    exist=$(crontab -l | grep "$item" | grep -v "#" | wc -l)
-    if [ "$exist" == "0" ]; then
-        log_info "add cron for $server_name"
-
-        cron=$(mktemp)
-        crontab -l > $cron
-        echo "*/1 * * * * $item" >> $cron
-        crontab $cron
-        rm -f $cron
-    fi
-}
-
-function del_cron() {
-    item="$workdir/tool/check.sh >>$workdir/log/check.log 2>&1"
-    exist=$(crontab -l | grep "$item" | grep -v "#" | wc -l)
-    if [ "$exist" != "0" ]; then
-        log_info "del cron for $server_name"
-
-        cron=$(mktemp)
-        crontab -l | grep -v "$item" > $cron
-        crontab $cron
-        rm -f $cron
-    fi
 }
