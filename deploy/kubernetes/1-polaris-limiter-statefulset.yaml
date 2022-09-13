@@ -17,7 +17,7 @@ spec:
         app: polaris-limiter
     spec:
       containers:
-        - image: polarismesh/polaris-limiter:latest
+        - image: polarismesh/polaris-limiter:##LIMITER_SERVER_VERSION##
           imagePullPolicy: Always
           name: polaris-limiter
           resources:
