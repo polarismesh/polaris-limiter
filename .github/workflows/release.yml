@@ -41,11 +41,11 @@ jobs:
           if [ ${GOOS} == "kubernetes" ];then
             set -e
             cd deploy
-            DIR_NAME=polaris-limiter-release_${SERVER_VERSION}.${GOOS}
+            DIR_NAME=polaris-limiter-release_${VERSION}.${GOOS}
             mkdir ${DIR_NAME}
             pushd ${DIR_NAME}
             cp ../kubernetes/* ./
-            sed -i "s/##LIMITER_SERVER_VERSION##/${SERVER_VERSION}/g" 1-polaris-limiter-statefulset.yaml
+            sed -i "s/##LIMITER_SERVER_VERSION##/${VERSION}/g" 1-polaris-limiter-statefulset.yaml
             popd
             PACKAGE_NAME=${DIR_NAME}.zip
             zip -r ${PACKAGE_NAME} ${DIR_NAME}
