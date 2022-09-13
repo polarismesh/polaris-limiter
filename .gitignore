@@ -9,3 +9,7 @@ polaris-limiter-release*.*
 .vscode
 
 *.log
+
+log/
+
+vendor/

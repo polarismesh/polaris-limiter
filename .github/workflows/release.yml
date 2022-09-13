@@ -21,8 +21,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-        with:
-          go-version: 1.16.5
 
       - name: Get version
         id: get_version
@@ -40,10 +38,25 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
-          echo "version is $VERSION"
-          bash build.sh $VERSION
-          PACKAGE_NAME=$(ls | grep polaris-limiter-release*.zip | sed -n '1p')
-          echo ::set-output name=name::${PACKAGE_NAME}
+          if [ ${GOOS} == "kubernetes" ];then
+            set -e
+            cd deploy
+            DIR_NAME=polaris-limiter-release_${SERVER_VERSION}.${GOOS}
+            mkdir ${DIR_NAME}
+            pushd ${DIR_NAME}
+            cp ../kubernetes/* ./
+            popd
+            PACKAGE_NAME=${DIR_NAME}.zip
+            zip -r ${PACKAGE_NAME} ${DIR_NAME}
+            mv ${PACKAGE_NAME} ../
+            echo ::set-output name=name::${PACKAGE_NAME}
+          else
+            set -e
+            echo "version is $VERSION"
+            bash build.sh $VERSION
+            PACKAGE_NAME=$(ls | grep polaris-limiter-release*.zip | sed -n '1p')
+            echo ::set-output name=name::${PACKAGE_NAME}
+          fi
 
       - name: Upload asset
         uses: actions/upload-release-asset@v1
