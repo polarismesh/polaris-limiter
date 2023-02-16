@@ -26,6 +26,7 @@ import (
 
 	"github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/polarismesh/polaris-limiter/apiserver"
@@ -103,7 +104,10 @@ func startHeartbeat(ctx context.Context) {
 func doWithPolarisClient(handle func(polaris.PolarisGRPCClient) error) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	conn, err := grpc.DialContext(ctx, polarisServerAddress, grpc.WithInsecure())
+	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	conn, err := grpc.DialContext(ctx, polarisServerAddress, opts...)
 	if err != nil {
 		return err
 	}
