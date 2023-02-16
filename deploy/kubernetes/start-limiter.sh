@@ -2,7 +2,7 @@
 
 LIMITER_MY_ID=${MY_ID}
 
-if [ ${LIMITER_MY_ID} = "" ]; then
+if [ "${LIMITER_MY_ID}" = "" ]; then
     HOST=`hostname -s`
     echo "CURRENT POD HOSTNAME : ${HOST}"
     if [[ $HOST =~ (.*)-([0-9]+)$ ]]; then
@@ -17,7 +17,7 @@ if [ ${LIMITER_MY_ID} = "" ]; then
 fi
 
 # 导出环境变量
-export MY_ID=${LIMITER_MY_ID}
+export MY_ID="${LIMITER_MY_ID}"
 
 # 格式化 /root/polaris-limiter.yaml 文件
 envsubst </root/polaris-limiter.yaml.example >/root/polaris-limiter.yaml
