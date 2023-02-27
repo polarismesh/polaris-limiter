@@ -33,4 +33,4 @@ if [ ${pre_release} == 0 ]; then
   extra_tags="-t ${docker_repository}/polaris-limiter:latest"
 fi
 
-docker buildx build --network=host -t ${docker_repository}/polaris-limiter:${docker_tag} ${extra_tags} --platform ${platforms} --push ./
+docker buildx build --network=host -t ${docker_repository}:${docker_tag} ${extra_tags} --platform ${platforms} --push ./
