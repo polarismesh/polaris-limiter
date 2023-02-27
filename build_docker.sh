@@ -30,7 +30,7 @@ extra_tags=""
 
 pre_release=`echo ${docker_tag}|egrep "(alpha|beta|rc|[T|t]est)"|wc -l`
 if [ ${pre_release} == 0 ]; then
-  extra_tags="-t ${docker_repository}/polaris-limiter:latest"
+  extra_tags="-t ${docker_repository}:latest"
 fi
 
 docker buildx build --network=host -t ${docker_repository}:${docker_tag} ${extra_tags} --platform ${platforms} --push ./
