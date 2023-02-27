@@ -10,13 +10,27 @@ docker_tag=$1
 
 echo "docker repository : ${docker_repository}, tag : ${docker_tag}"
 
-bash build.sh ${docker_tag}
+arch_list=( "amd64" "arm64" )
+platforms=""
 
-if [ $? != 0 ]; then
-    echo "build polaris-limiter failed"
-    exit 1
+for arch in ${arch_list[@]}; do
+    export GOARCH=${arch}
+    bash build.sh ${docker_tag}
+    if [ $? != 0 ]; then
+      echo "build polaris-limiter failed"
+      exit 1
+    fi
+
+    mv polaris-limiter polaris-limiter-${arch}
+    platforms+="linux/${arch},"
+done
+
+platforms=${platforms::-1}
+extra_tags=""
+
+pre_release=`echo ${docker_tag}|egrep "(alpha|beta|rc|[T|t]est)"|wc -l`
+if [ ${pre_release} == 0 ]; then
+  extra_tags="-t ${docker_repository}/polaris-limiter:latest"
 fi
 
-docker build --network=host -t ${docker_repository}:${docker_tag} ./
-
-docker push ${docker_repository}:${docker_tag}
+docker buildx build --network=host -t ${docker_repository}/polaris-limiter:${docker_tag} ${extra_tags} --platform ${platforms} --push ./
