@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/modern-go/reflect2"
+	"go.uber.org/zap"
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/log"
@@ -216,10 +217,12 @@ func (cm *CounterManagerV2) AddCounter(initReq *apiv2.RateLimitInitRequest, rule
 // GetCounter 获取计数器
 func (cm *CounterManagerV2) GetCounter(counterKey uint32) (apiv2.Code, CounterV2) {
 	if counterKey > cm.maxSize {
+		log.Error("counter key is bigger then max", zap.Uint32("counter-key", counterKey), zap.Uint32("max-size", cm.maxSize))
 		return apiv2.NotFoundLimiter, nil
 	}
 	counter := cm.counters[toArrayIndex(counterKey)]
 	if reflect2.IsNil(counter) {
+		log.Error("counter key not found target counter", zap.Uint32("counter-key", counterKey))
 		return apiv2.NotFoundLimiter, nil
 	}
 	return apiv2.ExecuteSuccess, counter

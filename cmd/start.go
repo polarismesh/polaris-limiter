@@ -23,9 +23,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/polarismesh/polaris-limiter/bootstrap"
-	// "log"
-	// "os"
-	// "runtime/trace"
 )
 
 var (
