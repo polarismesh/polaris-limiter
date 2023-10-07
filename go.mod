@@ -1,6 +1,6 @@
 module github.com/polarismesh/polaris-limiter
 
-go 1.21.0
+go 1.21
 
 require (
 	github.com/emicklei/go-restful v2.12.0+incompatible
