@@ -136,10 +136,10 @@ func (l *LogStatHandler) LogPrecisionRecord(values map[interface{}]plugin.RateLi
 	for _, value := range values {
 		rateLimitData := value.GetPrecisionData()
 		limited := rateLimitData.GetLimited()
-		if limited == 0 {
-			// 没有发生限流，则不打印精度日志
-			continue
-		}
+		//if limited == 0 {
+		//	// 没有发生限流，则不打印精度日志
+		//	continue
+		//}
 		total++
 		logStatValue := PoolGetLogStatValue()
 		logStatValue.Namespace = value.GetNamespace()
