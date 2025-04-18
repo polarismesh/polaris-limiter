@@ -19,8 +19,9 @@ RUN set -eux && \
     echo "Asia/Shanghai" > /etc/timezone && \
     date
 
-ARG TARGETARCH
-COPY polaris-limiter-${TARGETARCH} /root/polaris-limiter
+#ARG TARGETARCH
+#COPY polaris-limiter-${TARGETARCH} /root/polaris-limiter
+COPY polaris-limiter /root/polaris-limiter
 COPY ./deploy/kubernetes/start-limiter.sh /root/start-limiter.sh
 
 WORKDIR /root
