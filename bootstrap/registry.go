@@ -226,7 +226,8 @@ func GetLocalHost(probeAddr string) (string, error) {
 	if len(probeAddr) == 0 {
 		return "127.0.0.1", nil
 	}
-	conn, err := net.Dial("tcp", probeAddr)
+	// 使用 DialTimeout 替代 Dial，防止网络阻塞
+	conn, err := net.DialTimeout("tcp", probeAddr, 2*time.Second)
 	if err != nil {
 		return "", err
 	}
