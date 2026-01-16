@@ -14,7 +14,7 @@ workdir=$(pwd)
 #------------------------------------------------------
 source tool/include
 
-pids=$(ps -e -o pid,cmd | grep "$cmdline" | grep -v "grep" | awk '{print $1}')
+pids=$(ps -e -o pid,command | grep "$cmdline" | grep -v "grep" | awk '{print $1}')
 array=($pids)
 if [ "${#array[@]}" == "0" ]; then
     start
