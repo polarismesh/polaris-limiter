@@ -5,12 +5,16 @@ set -e
 if [ $# -gt 0 ]; then
   version="$1"
 else
-  current=`date "+%Y-%m-%d %H:%M:%S"`
-  timeStamp=`date -d "$current" +%s`
-  currentTimeStamp=$(((timeStamp*1000+10#`date "+%N"`/1000000)/1000))
-  version="$currentTimeStamp"
+  if [[ $(uname) == "Darwin" ]]; then
+    version=$(date +%s)000
+  else
+    current=`date "+%Y-%m-%d %H:%M:%S"`
+    timeStamp=`date -d "$current" +%s`
+    currentTimeStamp=$(((timeStamp*1000+10#`date "+%N"`/1000000)/1000))
+    version="$currentTimeStamp"
+  fi
 fi
-workdir=$(dirname $(realpath $0))
+workdir=$(cd $(dirname $0); pwd)
 bin_name="polaris-limiter"
 if [ "${GOOS}" == "" ]; then
   GOOS=$(go env GOOS)
