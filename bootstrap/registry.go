@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -224,17 +223,21 @@ func selfDeregister() error {
 
 // GetLocalHost 获取本地IP地址
 func GetLocalHost(probeAddr string) (string, error) {
-	conn, err := net.Dial("tcp", probeAddr)
+	if len(probeAddr) == 0 {
+		return "127.0.0.1", nil
+	}
+	// 使用 DialTimeout 替代 Dial，防止网络阻塞
+	conn, err := net.DialTimeout("tcp", probeAddr, 2*time.Second)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = conn.Close() }()
 
-	localAddr := conn.LocalAddr().String() // ip:port
-	items := strings.Split(localAddr, ":")
-	if len(items) != 2 {
+	localAddr := conn.LocalAddr()
+	tcpAddr, ok := localAddr.(*net.TCPAddr)
+	if !ok {
 		return "", fmt.Errorf("get local address format is invalid")
 	}
 
-	return items[0], nil
+	return tcpAddr.IP.String(), nil
 }
