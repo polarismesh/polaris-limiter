@@ -19,17 +19,18 @@ package v2
 
 import (
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 )
 
 // 带上精准时间戳的上报消息
 type TimedRateLimitReportResponse struct {
-	RateLimitReportResponse
+	ratelimiter.RateLimitReportResponse
 	// 创建时间，精度为微秒
 	createTimeMicro int64
 }
 
 // 转换为真实的上报请求
-func (t *TimedRateLimitReportResponse) ToRateLimitReportResponse() *RateLimitReportResponse {
+func (t *TimedRateLimitReportResponse) ToRateLimitReportResponse() *ratelimiter.RateLimitReportResponse {
 	return &t.RateLimitReportResponse
 }
 
@@ -39,20 +40,20 @@ func (t *TimedRateLimitReportResponse) CreateTimeMicro() int64 {
 }
 
 // 新建一个初始化回复结构体
-func NewRateLimitInitResponse(code Code, target *LimitTarget) *RateLimitInitResponse {
-	return &RateLimitInitResponse{Code: uint32(code), Target: target, Timestamp: utils.CurrentMillisecond()}
+func NewRateLimitInitResponse(code Code, target *ratelimiter.LimitTarget) *ratelimiter.RateLimitInitResponse {
+	return &ratelimiter.RateLimitInitResponse{Code: uint32(code), Target: target, Timestamp: utils.CurrentMillisecond()}
 }
 
 // 新建一个初始化回复结构体
-func NewRateLimitBatchInitResponse(code Code) *RateLimitBatchInitResponse {
-	return &RateLimitBatchInitResponse{Code: uint32(code), Timestamp: utils.CurrentMillisecond()}
+func NewRateLimitBatchInitResponse(code Code) *ratelimiter.RateLimitBatchInitResponse {
+	return &ratelimiter.RateLimitBatchInitResponse{Code: uint32(code), Timestamp: utils.CurrentMillisecond()}
 }
 
 // 新建一个上报回复结构体
 func NewRateLimitReportResponse(code Code) *TimedRateLimitReportResponse {
 	curTimeMicro := utils.CurrentMicrosecond()
 	return &TimedRateLimitReportResponse{
-		RateLimitReportResponse: RateLimitReportResponse{
+		RateLimitReportResponse: ratelimiter.RateLimitReportResponse{
 			Code: uint32(code), Timestamp: curTimeMicro / 1e3,
 		},
 		createTimeMicro: curTimeMicro,

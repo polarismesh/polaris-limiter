@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/modern-go/reflect2"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 	"go.uber.org/zap"
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
@@ -41,7 +42,7 @@ type CounterIdentifier struct {
 }
 
 // NewCounterIdentifier 创建限流计数器标识
-func NewCounterIdentifier(initReq *apiv2.RateLimitInitRequest, ruleIdx int) *CounterIdentifier {
+func NewCounterIdentifier(initReq *ratelimiter.RateLimitInitRequest, ruleIdx int) *CounterIdentifier {
 	target := initReq.GetTarget()
 	durationTime := time.Duration(initReq.GetTotals()[ruleIdx].GetDuration()) * time.Second
 	return &CounterIdentifier{
@@ -189,7 +190,7 @@ func toArrayIndex(key uint32) int {
 }
 
 // AddCounter 增加计数器
-func (cm *CounterManagerV2) AddCounter(initReq *apiv2.RateLimitInitRequest, ruleIdx int,
+func (cm *CounterManagerV2) AddCounter(initReq *ratelimiter.RateLimitInitRequest, ruleIdx int,
 	sender Client, expireDuration time.Duration) (apiv2.Code, CounterV2) {
 	identifier := NewCounterIdentifier(initReq, ruleIdx)
 	quotaTotalRule := initReq.GetTotals()[ruleIdx]

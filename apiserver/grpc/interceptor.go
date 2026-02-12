@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/wrappers"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -110,7 +111,7 @@ type msgIdProvider interface {
 
 // GetV2ResponseCode 获取返回码
 func GetV2ResponseCode(rsp interface{}) (uint32, bool) {
-	if v2Resp, ok := rsp.(*apiv2.RateLimitResponse); ok {
+	if v2Resp, ok := rsp.(*ratelimiter.RateLimitResponse); ok {
 		return apiv2.GetErrorCode(v2Resp), true
 	}
 	return 0, false

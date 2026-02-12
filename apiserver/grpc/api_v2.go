@@ -22,11 +22,12 @@ import (
 	"io"
 
 	"github.com/modern-go/reflect2"
-
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 	"github.com/polarismesh/polaris-limiter/plugin"
 	"github.com/polarismesh/polaris-limiter/ratelimitv2"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 )
 
 // RateLimitServiceV2 限流Server：v2接口
@@ -53,7 +54,7 @@ type clientWrapper struct {
 }
 
 // Service 限流KEY初始化
-func (s *RateLimitServiceV2) Service(stream apiv2.RateLimitGRPCV2_ServiceServer) error {
+func (s *RateLimitServiceV2) Service(stream ratelimiter.RateLimitGRPCV2_ServiceServer) error {
 	ctx := parseContext(stream.Context())
 	clientIP := utils.ParseStructClientIP(ctx)
 	collector := s.statics.CreateRateLimitStatCollectorV2()
@@ -71,25 +72,25 @@ func (s *RateLimitServiceV2) Service(stream apiv2.RateLimitGRPCV2_ServiceServer)
 		}
 		var startTimeMicro = utils.CurrentMicrosecond()
 		var counter ratelimitv2.CounterV2
-		var allResp = &apiv2.RateLimitResponse{Cmd: req.Cmd}
+		var allResp = &ratelimiter.RateLimitResponse{Cmd: req.Cmd}
 		var timedReportResp *apiv2.TimedRateLimitReportResponse
 		var code = apiv2.ExecuteSuccess
 		switch req.Cmd {
-		case apiv2.RateLimitCmd_ACQUIRE:
+		case ratelimiter.RateLimitCmd_ACQUIRE:
 			fallthrough // 批量上报和单独上报处理逻辑一致
-		case apiv2.RateLimitCmd_BATCH_ACQUIRE:
+		case ratelimiter.RateLimitCmd_BATCH_ACQUIRE:
 			timedReportResp, counter = s.coreServer.AcquireQuota(clientWrapper.client,
 				startTimeMicro, req.GetRateLimitReportRequest(), collector)
 			allResp.RateLimitReportResponse = timedReportResp.ToRateLimitReportResponse()
 			code = apiv2.Code(timedReportResp.RateLimitReportResponse.Code)
-		case apiv2.RateLimitCmd_INIT:
+		case ratelimiter.RateLimitCmd_INIT:
 			allResp.RateLimitInitResponse, clientWrapper.client = s.coreServer.InitializeClient(
 				req.GetRateLimitInitRequest(), clientWrapper.client, clientIP, streamCtx)
 			if nil == allResp.RateLimitInitResponse {
 				allResp.RateLimitInitResponse, counter = s.coreServer.InitializeQuota(
 					ctx, clientWrapper.client, req.GetRateLimitInitRequest())
 			}
-		case apiv2.RateLimitCmd_BATCH_INIT:
+		case ratelimiter.RateLimitCmd_BATCH_INIT:
 			allResp.RateLimitBatchInitResponse, clientWrapper.client = s.coreServer.InitializeClientBatch(
 				req.GetRateLimitBatchInitRequest(), clientWrapper.client, clientIP, streamCtx)
 			if nil == allResp.RateLimitBatchInitResponse { // 客户端初始化OK
@@ -125,6 +126,6 @@ func (s *RateLimitServiceV2) Service(stream apiv2.RateLimitGRPCV2_ServiceServer)
 
 // TimeAdjust 获取时间戳
 func (s *RateLimitServiceV2) TimeAdjust(
-	ctx context.Context, req *apiv2.TimeAdjustRequest) (*apiv2.TimeAdjustResponse, error) {
-	return &apiv2.TimeAdjustResponse{ServerTimestamp: utils.CurrentMillisecond()}, nil
+	ctx context.Context, req *ratelimiter.TimeAdjustRequest) (*ratelimiter.TimeAdjustResponse, error) {
+	return &ratelimiter.TimeAdjustResponse{ServerTimestamp: utils.CurrentMillisecond()}, nil
 }

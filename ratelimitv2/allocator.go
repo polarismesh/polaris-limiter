@@ -17,12 +17,14 @@
 
 package ratelimitv2
 
-import apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+import (
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
+)
 
 // QuotaAllocator 请求分配器
 type QuotaAllocator interface {
 	// Mode 返回分配器所属的模式
-	Mode() apiv2.Mode
+	Mode() ratelimiter.Mode
 	// Allocate 分配配额
-	Allocate(client Client, quotaSum *apiv2.QuotaSum, clientTimeMs int64, serverTimeMicro int64) *apiv2.QuotaLeft
+	Allocate(client Client, quotaSum *ratelimiter.QuotaSum, clientTimeMs int64, serverTimeMicro int64) *ratelimiter.QuotaLeft
 }

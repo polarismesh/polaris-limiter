@@ -26,10 +26,11 @@ import (
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 	"github.com/polarismesh/polaris-limiter/plugin"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 )
 
 // defaultMode 默认为批量抢占模式
-const defaultMode = apiv2.Mode_BATCH_OCCUPY
+const defaultMode = ratelimiter.Mode_BATCH_OCCUPY
 
 // InitRequest 初始化请求
 type InitRequest struct {
@@ -38,7 +39,7 @@ type InitRequest struct {
 	Sender         Client
 	Duration       time.Duration
 	ExpireDuration time.Duration
-	AmountMode     apiv2.QuotaMode
+	AmountMode     ratelimiter.QuotaMode
 	PushManager    PushManager
 }
 
@@ -51,10 +52,10 @@ type CounterV2 interface {
 	// Reload 刷新配额值
 	Reload(InitRequest)
 	// AcquireQuota 原子增加
-	AcquireQuota(client Client, quotaSum *apiv2.QuotaSum,
-		nowMs int64, startMicro int64, collector *plugin.RateLimitStatCollectorV2) *apiv2.QuotaLeft
+	AcquireQuota(client Client, quotaSum *ratelimiter.QuotaSum,
+		nowMs int64, startMicro int64, collector *plugin.RateLimitStatCollectorV2) *ratelimiter.QuotaLeft
 	// SumQuota 获取当前quota总量
-	SumQuota(client Client, timestampMs int64) *apiv2.QuotaLeft
+	SumQuota(client Client, timestampMs int64) *ratelimiter.QuotaLeft
 	// IsExpired 是否已过期
 	IsExpired() bool
 	// PushMessage 推送消息
@@ -66,7 +67,7 @@ type CounterV2 interface {
 	// Update 更新时间戳
 	Update()
 	// Mode 配额分配模式
-	Mode() apiv2.Mode
+	Mode() ratelimiter.Mode
 	// MaxAmount 最大配额数
 	MaxAmount() uint32
 	// ClientCount 客户端数量
@@ -257,7 +258,7 @@ func (c *counterV2) LastUpdateTime() int64 {
 }
 
 // Mode 配额分配模式
-func (c *counterV2) Mode() apiv2.Mode {
+func (c *counterV2) Mode() ratelimiter.Mode {
 	return defaultMode
 }
 
@@ -314,8 +315,8 @@ func (c *counterV2) IsExpired() bool {
 }
 
 // AcquireQuota 获取超时配额
-func (c *counterV2) AcquireQuota(client Client, quotaSum *apiv2.QuotaSum,
-	timestampMs int64, startTimeMicro int64, collector *plugin.RateLimitStatCollectorV2) *apiv2.QuotaLeft {
+func (c *counterV2) AcquireQuota(client Client, quotaSum *ratelimiter.QuotaSum,
+	timestampMs int64, startTimeMicro int64, collector *plugin.RateLimitStatCollectorV2) *ratelimiter.QuotaLeft {
 	sumUsed := quotaSum.GetUsed()
 	sumLimit := quotaSum.GetLimited()
 	c.doQuotaStatReport(startTimeMicro, sumUsed, sumLimit, client, collector)
@@ -323,9 +324,9 @@ func (c *counterV2) AcquireQuota(client Client, quotaSum *apiv2.QuotaSum,
 }
 
 // SumQuota 汇总超时
-func (c *counterV2) SumQuota(client Client, timestampMs int64) *apiv2.QuotaLeft {
+func (c *counterV2) SumQuota(client Client, timestampMs int64) *ratelimiter.QuotaLeft {
 	// 更新客户端时间戳
-	return c.allocator.Allocate(client, &apiv2.QuotaSum{
+	return c.allocator.Allocate(client, &ratelimiter.QuotaSum{
 		CounterKey: c.counterKey,
 		Used:       0,
 		Limited:    0,
@@ -348,7 +349,7 @@ func (c *counterV2) reloadMaxAmount(timeStr string, clientCount uint32, clientId
 	amountMode := atomic.LoadInt32(&c.amountMode)
 	var action string
 	var curMaxAmount uint32
-	if amountMode != int32(apiv2.QuotaMode_DIVIDE) {
+	if amountMode != int32(ratelimiter.QuotaMode_DIVIDE) {
 		// 全局配额模式
 		action = TriggerShareGlobal
 		curMaxAmount = ruleMaxAmount

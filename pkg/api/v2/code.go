@@ -19,6 +19,7 @@ package v2
 
 import (
 	"github.com/polarismesh/polaris-limiter/plugin"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 )
 
 type Code uint32
@@ -73,12 +74,12 @@ const (
 )
 
 // 返回接口名
-func GetAPIKey(resp *RateLimitResponse) plugin.APIKey {
-	if resp.GetCmd() == RateLimitCmd_INIT {
+func GetAPIKey(resp *ratelimiter.RateLimitResponse) plugin.APIKey {
+	if resp.GetCmd() == ratelimiter.RateLimitCmd_INIT {
 		return plugin.InitQuotaV2
-	} else if resp.GetCmd() == RateLimitCmd_ACQUIRE {
+	} else if resp.GetCmd() == ratelimiter.RateLimitCmd_ACQUIRE {
 		return plugin.AcquireQuotaV2
-	} else if resp.GetCmd() == RateLimitCmd_BATCH_INIT {
+	} else if resp.GetCmd() == ratelimiter.RateLimitCmd_BATCH_INIT {
 		return plugin.BatchInitQuotaV2
 	} else { // resp.GetCmd() == RateLimitCmd_BATCH_ACQUIRE
 		return plugin.BatchAcquireQuotaV2
@@ -86,10 +87,10 @@ func GetAPIKey(resp *RateLimitResponse) plugin.APIKey {
 }
 
 // 返回错误码
-func GetErrorCode(resp *RateLimitResponse) uint32 {
-	if resp.GetCmd() == RateLimitCmd_INIT {
+func GetErrorCode(resp *ratelimiter.RateLimitResponse) uint32 {
+	if resp.GetCmd() == ratelimiter.RateLimitCmd_INIT {
 		return resp.GetRateLimitInitResponse().GetCode()
-	} else if resp.GetCmd() == RateLimitCmd_ACQUIRE || resp.GetCmd() == RateLimitCmd_BATCH_ACQUIRE {
+	} else if resp.GetCmd() == ratelimiter.RateLimitCmd_ACQUIRE || resp.GetCmd() == ratelimiter.RateLimitCmd_BATCH_ACQUIRE {
 		return resp.GetRateLimitReportResponse().GetCode()
 	} else {
 		if resp.GetRateLimitBatchInitResponse() != nil {
