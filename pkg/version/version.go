@@ -1,7 +1,7 @@
-/**
- * Tencent is pleased to support the open source community by making Polaris available.
+/*
+ * Tencent is pleased to support the open source community by making polaris-limiter available.
  *
- * Copyright (C) 2019 THL A29 Limited, a Tencent company. All rights reserved.
+ * Copyright (C) 2021 Tencent. All rights reserved.
  *
  * Licensed under the BSD 3-Clause License (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,24 +18,19 @@
 package version
 
 var (
-	Version   string
+	Version   = "v2.0.0"
 	BuildDate string
 )
 
 // Get version 获取版本号
 func Get() string {
-	if Version == "" {
-		return "v0.1.0"
-	}
-
 	return Version
 }
 
 // GetRevision 获取完整版本号信息，包括时间戳的
 func GetRevision() string {
-	if Version == "" || BuildDate == "" {
-		return "v0.1.0"
+	if BuildDate == "" {
+		return Version
 	}
-
 	return Version + "." + BuildDate
 }
