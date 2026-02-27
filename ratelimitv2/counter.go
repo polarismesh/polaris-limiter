@@ -150,7 +150,7 @@ func (cc *CounterClients) DelSender(sender Client, counter *counterV2, counterEx
 	clientKeys, ok := cc.clientIds[sender.ClientId()]
 	if !ok {
 		// 已经不存在或者已经被置换，则不进行删除，一般不会出现
-		log.Warnf("[RateLimit]clientId %s not exist when del sender %s", sender.ClientId(), sender.ClientKey())
+		log.Warnf("[RateLimit]clientId %s not exist when del sender %d", sender.ClientId(), sender.ClientKey())
 		return
 	}
 	if !counterExpired && !sender.IsDetached() {

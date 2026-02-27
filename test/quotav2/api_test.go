@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 	. "github.com/smartystreets/goconvey/convey"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -54,7 +55,7 @@ func init() {
 }
 
 const (
-	mockServerAddr = "127.0.0.1:8081"
+	mockServerAddr = "127.0.0.1:8101"
 	timeout        = 1 * time.Second
 )
 
@@ -81,11 +82,11 @@ var (
 
 // 构造初始化请求
 func buildInitRequestWitDuration(svcName string, namespace string, methodName string,
-	clientId string, totals map[time.Duration]uint32, quotaMode apiv2.QuotaMode) *apiv2.RateLimitRequest {
-	req := &apiv2.RateLimitRequest{
-		Cmd: apiv2.RateLimitCmd_INIT,
-		RateLimitInitRequest: &apiv2.RateLimitInitRequest{
-			Target: &apiv2.LimitTarget{
+	clientId string, totals map[time.Duration]uint32, quotaMode ratelimiter.QuotaMode) *ratelimiter.RateLimitRequest {
+	req := &ratelimiter.RateLimitRequest{
+		Cmd: ratelimiter.RateLimitCmd_INIT,
+		RateLimitInitRequest: &ratelimiter.RateLimitInitRequest{
+			Target: &ratelimiter.LimitTarget{
 				Namespace: namespace,
 				Service:   svcName,
 				Labels:    fmt.Sprintf("method:%s", methodName),
@@ -93,7 +94,7 @@ func buildInitRequestWitDuration(svcName string, namespace string, methodName st
 			ClientId: clientId},
 	}
 	for timeDuration, total := range totals {
-		req.RateLimitInitRequest.Totals = append(req.RateLimitInitRequest.Totals, &apiv2.QuotaTotal{
+		req.RateLimitInitRequest.Totals = append(req.RateLimitInitRequest.Totals, &ratelimiter.QuotaTotal{
 			Duration:  uint32(timeDuration.Nanoseconds() / time.Second.Nanoseconds()),
 			MaxAmount: total,
 			Mode:      quotaMode,
@@ -103,18 +104,18 @@ func buildInitRequestWitDuration(svcName string, namespace string, methodName st
 }
 
 // 构造初始化请求
-func buildAcquireRequestWitDuration(initResp *apiv2.RateLimitInitResponse,
-	usedAmounts map[time.Duration]uint32, limitAmounts map[time.Duration]uint32) *apiv2.RateLimitRequest {
-	req := &apiv2.RateLimitRequest{
-		Cmd: apiv2.RateLimitCmd_ACQUIRE,
-		RateLimitReportRequest: &apiv2.RateLimitReportRequest{
+func buildAcquireRequestWitDuration(initResp *ratelimiter.RateLimitInitResponse,
+	usedAmounts map[time.Duration]uint32, limitAmounts map[time.Duration]uint32) *ratelimiter.RateLimitRequest {
+	req := &ratelimiter.RateLimitRequest{
+		Cmd: ratelimiter.RateLimitCmd_ACQUIRE,
+		RateLimitReportRequest: &ratelimiter.RateLimitReportRequest{
 			ClientKey: initResp.GetClientKey(),
 			Timestamp: time.Now().UnixNano() / 1e6,
 		},
 	}
 	var idx int
 	for duration, used := range usedAmounts {
-		req.RateLimitReportRequest.QuotaUses = append(req.RateLimitReportRequest.QuotaUses, &apiv2.QuotaSum{
+		req.RateLimitReportRequest.QuotaUses = append(req.RateLimitReportRequest.QuotaUses, &ratelimiter.QuotaSum{
 			CounterKey: initResp.GetCounters()[idx].GetCounterKey(),
 			Used:       used,
 			Limited:    limitAmounts[duration],
@@ -141,11 +142,11 @@ func TestSingleThreadInitAcquireQuery(t *testing.T) {
 			conn.Close()
 		}()
 		// 初始化上报数据
-		client := apiv2.NewRateLimitGRPCV2Client(conn)
+		client := ratelimiter.NewRateLimitGRPCV2Client(conn)
 		initReq := buildInitRequestWitDuration(singleSvcName, singleNamespace, singleMethodName,
 			singleClientId, map[time.Duration]uint32{
 				time.Second: singleTotal,
-			}, apiv2.QuotaMode_WHOLE)
+			}, ratelimiter.QuotaMode_WHOLE)
 		stream, err := client.Service(context.Background())
 		So(err, ShouldBeNil)
 		slog.Printf("v2 init request sent\n")
@@ -155,7 +156,7 @@ func TestSingleThreadInitAcquireQuery(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(initResp.GetRateLimitInitResponse().Code, ShouldEqual, apiv2.ExecuteSuccess)
 		slog.Printf("v2 init resp recved, %+v\n", initResp)
-		So(initResp.Cmd, ShouldEqual, apiv2.RateLimitCmd_INIT)
+		So(initResp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_INIT)
 		So(initResp.RateLimitInitResponse.Counters[0].Left, ShouldEqual, singleTotal)
 		// 处理测试逻辑
 		var total uint32
@@ -178,7 +179,7 @@ func TestSingleThreadInitAcquireQuery(t *testing.T) {
 			So(err, ShouldBeNil)
 			resp, err := stream.Recv()
 			So(err, ShouldBeNil)
-			So(resp.Cmd, ShouldEqual, apiv2.RateLimitCmd_ACQUIRE)
+			So(resp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_ACQUIRE)
 			reportResp := resp.GetRateLimitReportResponse()
 			So(reportResp.Code, ShouldEqual, apiv2.ExecuteSuccess)
 			slog.Printf("v2 report resp recved, %+v\n", reportResp)
@@ -212,13 +213,13 @@ func TestSingleThreadStreamingFail(t *testing.T) {
 			conn.Close()
 		}()
 		// 初始化上报数据
-		client := apiv2.NewRateLimitGRPCV2Client(conn)
-		var streams []apiv2.RateLimitGRPCV2_ServiceClient
+		client := ratelimiter.NewRateLimitGRPCV2Client(conn)
+		var streams []ratelimiter.RateLimitGRPCV2_ServiceClient
 		for i := 0; i < 2; i++ {
 			initReq := buildInitRequestWitDuration(singleSvcName, singleNamespace, singleMethodName,
 				singleClientId, map[time.Duration]uint32{
 					time.Second: singleTotal,
-				}, apiv2.QuotaMode_WHOLE)
+				}, ratelimiter.QuotaMode_WHOLE)
 			stream, err := client.Service(context.Background())
 			So(err, ShouldBeNil)
 			streams = append(streams, stream)
@@ -229,7 +230,7 @@ func TestSingleThreadStreamingFail(t *testing.T) {
 			So(err, ShouldBeNil)
 			So(initResp.GetRateLimitInitResponse().Code, ShouldEqual, apiv2.ExecuteSuccess)
 			slog.Printf("v2 init resp recved, %+v\n", initResp)
-			So(initResp.Cmd, ShouldEqual, apiv2.RateLimitCmd_INIT)
+			So(initResp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_INIT)
 			// 处理测试逻辑
 			var total uint32
 			var limited uint32
@@ -250,7 +251,7 @@ func TestSingleThreadStreamingFail(t *testing.T) {
 			So(err, ShouldBeNil)
 			resp, err := stream.Recv()
 			So(err, ShouldBeNil)
-			So(resp.Cmd, ShouldEqual, apiv2.RateLimitCmd_ACQUIRE)
+			So(resp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_ACQUIRE)
 			reportResp := resp.GetRateLimitReportResponse()
 			So(reportResp.Code, ShouldEqual, apiv2.ExecuteSuccess)
 			slog.Printf("v2 report resp recved, %+v\n", reportResp)
@@ -288,12 +289,12 @@ func TestSingleThreadStreamingQuery(t *testing.T) {
 			conn.Close()
 		}()
 		// 初始化上报数据
-		client := apiv2.NewRateLimitGRPCV2Client(conn)
+		client := ratelimiter.NewRateLimitGRPCV2Client(conn)
 		for i := 0; i < 200; i++ {
 			initReq := buildInitRequestWitDuration(singleSvcName, singleNamespace, singleMethodName,
 				singleClientId, map[time.Duration]uint32{
 					time.Second: singleTotal,
-				}, apiv2.QuotaMode_WHOLE)
+				}, ratelimiter.QuotaMode_WHOLE)
 			stream, err := client.Service(context.Background())
 			So(err, ShouldBeNil)
 			slog.Printf("v2 init request sent\n")
@@ -303,7 +304,7 @@ func TestSingleThreadStreamingQuery(t *testing.T) {
 			So(err, ShouldBeNil)
 			So(initResp.GetRateLimitInitResponse().Code, ShouldEqual, apiv2.ExecuteSuccess)
 			slog.Printf("v2 init resp recved, %+v\n", initResp)
-			So(initResp.Cmd, ShouldEqual, apiv2.RateLimitCmd_INIT)
+			So(initResp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_INIT)
 			// 处理测试逻辑
 			var total uint32
 			var limited uint32
@@ -324,7 +325,7 @@ func TestSingleThreadStreamingQuery(t *testing.T) {
 			So(err, ShouldBeNil)
 			resp, err := stream.Recv()
 			So(err, ShouldBeNil)
-			So(resp.Cmd, ShouldEqual, apiv2.RateLimitCmd_ACQUIRE)
+			So(resp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_ACQUIRE)
 			reportResp := resp.GetRateLimitReportResponse()
 			So(reportResp.Code, ShouldEqual, apiv2.ExecuteSuccess)
 			slog.Printf("v2 report resp recved, %+v\n", reportResp)
@@ -344,17 +345,17 @@ func TestSingleThreadStreamingQuery(t *testing.T) {
 
 // 单机均摊阈值的测试
 func TestMultiThreadDivideInitAcquireQuery(t *testing.T) {
-	testMultiThreadInitAcquireQuery(t, multiSvcName1, multiWholeDivide, apiv2.QuotaMode_DIVIDE)
+	testMultiThreadInitAcquireQuery(t, multiSvcName1, multiWholeDivide, ratelimiter.QuotaMode_DIVIDE)
 }
 
 // 单机均摊阈值的测试
 func TestMultiThreadWholeInitAcquireQuery(t *testing.T) {
-	testMultiThreadInitAcquireQuery(t, multiSvcName2, multiWholeTotal, apiv2.QuotaMode_WHOLE)
+	testMultiThreadInitAcquireQuery(t, multiSvcName2, multiWholeTotal, ratelimiter.QuotaMode_WHOLE)
 }
 
 // 返回期待的总量
-func expectTotal(count int, total uint32, mode apiv2.QuotaMode) uint32 {
-	if mode == apiv2.QuotaMode_WHOLE {
+func expectTotal(count int, total uint32, mode ratelimiter.QuotaMode) uint32 {
+	if mode == ratelimiter.QuotaMode_WHOLE {
 		return total
 	}
 	return total * uint32(count)
@@ -364,10 +365,10 @@ const IpPattern = "127.0.0.%d"
 
 // 单个线程内测试限流
 func testRateLimitInOneThread(idx int, wg *sync.WaitGroup, t *testing.T,
-	conn *grpc.ClientConn, svcName string, total uint32, mode apiv2.QuotaMode) {
+	conn *grpc.ClientConn, svcName string, total uint32, mode ratelimiter.QuotaMode) {
 	defer wg.Done()
 	Convey(fmt.Sprintf("测试客户端%d上报查询", idx), t, func() {
-		client := apiv2.NewRateLimitGRPCV2Client(conn)
+		client := ratelimiter.NewRateLimitGRPCV2Client(conn)
 		md := metadata.New(map[string]string{base.HeaderKeyClientIP: fmt.Sprintf(IpPattern, 11)})
 		stream, err := client.Service(metadata.NewOutgoingContext(context.Background(), md))
 		So(err, ShouldBeNil)
@@ -382,7 +383,7 @@ func testRateLimitInOneThread(idx int, wg *sync.WaitGroup, t *testing.T,
 		So(err, ShouldBeNil)
 		So(initResp.GetRateLimitInitResponse().Code, ShouldEqual, apiv2.ExecuteSuccess)
 		slog.Printf("v2 init resp %d recved, %+v\n", idx, initResp)
-		So(initResp.Cmd, ShouldEqual, apiv2.RateLimitCmd_INIT)
+		So(initResp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_INIT)
 		err = stream.Send(initReq)
 		So(err, ShouldBeNil)
 		initResp, err = stream.Recv()
@@ -408,7 +409,7 @@ func testRateLimitInOneThread(idx int, wg *sync.WaitGroup, t *testing.T,
 			So(err, ShouldBeNil)
 			resp, err := stream.Recv()
 			So(err, ShouldBeNil)
-			So(resp.Cmd, ShouldEqual, apiv2.RateLimitCmd_ACQUIRE)
+			So(resp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_ACQUIRE)
 			reportResp := resp.GetRateLimitReportResponse()
 			So(reportResp.Code, ShouldEqual, apiv2.ExecuteSuccess)
 			slog.Printf("v2 report %d resp recved, %+v\n", idx, reportResp)
@@ -428,7 +429,7 @@ func testRateLimitInOneThread(idx int, wg *sync.WaitGroup, t *testing.T,
 // 进行初始化，第一个调用init方法，期望看到初始化成功
 // 配额上报汇总，并发上报成功，期望看到按时间滑窗汇总结果
 // 配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
-func testMultiThreadInitAcquireQuery(t *testing.T, svcName string, total uint32, mode apiv2.QuotaMode) {
+func testMultiThreadInitAcquireQuery(t *testing.T, svcName string, total uint32, mode ratelimiter.QuotaMode) {
 	var opts []grpc.DialOption
 	opts = append(opts, grpc.WithInsecure())
 	opts = append(opts, grpc.WithBlock())
@@ -469,11 +470,11 @@ func TestSingleThreadLongAcquireQuery(t *testing.T) {
 			conn.Close()
 		}()
 		// 初始化上报数据
-		client := apiv2.NewRateLimitGRPCV2Client(conn)
+		client := ratelimiter.NewRateLimitGRPCV2Client(conn)
 		initReq := buildInitRequestWitDuration(singleLongSvcName, singleNamespace, singleMethodName,
 			singleClientId, map[time.Duration]uint32{
 				10 * time.Second: singleLongTotal,
-			}, apiv2.QuotaMode_WHOLE)
+			}, ratelimiter.QuotaMode_WHOLE)
 		stream, err := client.Service(context.Background())
 		So(err, ShouldBeNil)
 		slog.Printf("v2 init request sent\n")
@@ -483,7 +484,7 @@ func TestSingleThreadLongAcquireQuery(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(initResp.GetRateLimitInitResponse().Code, ShouldEqual, apiv2.ExecuteSuccess)
 		slog.Printf("v2 init resp recved, %+v\n", initResp)
-		So(initResp.Cmd, ShouldEqual, apiv2.RateLimitCmd_INIT)
+		So(initResp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_INIT)
 		So(initResp.RateLimitInitResponse.Counters[0].Left, ShouldEqual, singleLongTotal)
 		// 处理测试逻辑
 		var total uint32
@@ -512,7 +513,7 @@ func TestSingleThreadLongAcquireQuery(t *testing.T) {
 				So(err, ShouldBeNil)
 				resp, err := stream.Recv()
 				So(err, ShouldBeNil)
-				So(resp.Cmd, ShouldEqual, apiv2.RateLimitCmd_ACQUIRE)
+				So(resp.Cmd, ShouldEqual, ratelimiter.RateLimitCmd_ACQUIRE)
 				reportResp := resp.GetRateLimitReportResponse()
 				So(reportResp.Code, ShouldEqual, apiv2.ExecuteSuccess)
 				slog.Printf("v2 report resp recved, %+v\n", reportResp)
@@ -546,8 +547,8 @@ func TestTimeAdjust(t *testing.T) {
 			conn.Close()
 		}()
 		// 初始化上报数据
-		client := apiv2.NewRateLimitGRPCV2Client(conn)
-		resp, err := client.TimeAdjust(context.Background(), &apiv2.TimeAdjustRequest{})
+		client := ratelimiter.NewRateLimitGRPCV2Client(conn)
+		resp, err := client.TimeAdjust(context.Background(), &ratelimiter.TimeAdjustRequest{})
 		So(err, ShouldBeNil)
 		_ = resp
 		timeStamp := time.Unix(0, resp.ServerTimestamp*1e6)
@@ -579,7 +580,7 @@ func TestClientUpAndDown(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			Convey(fmt.Sprintf("测试客户端%d上报查询", idx), t, func() {
-				client := apiv2.NewRateLimitGRPCV2Client(conn)
+				client := ratelimiter.NewRateLimitGRPCV2Client(conn)
 				for i := 0; i < 4; i++ {
 					func() {
 						stream, err := client.Service(context.Background())
@@ -589,7 +590,7 @@ func TestClientUpAndDown(t *testing.T) {
 						initReq := buildInitRequestWitDuration(multiSvcName3, multiNamespace, multiMethodName,
 							clientId, map[time.Duration]uint32{
 								time.Second: total,
-							}, apiv2.QuotaMode_DIVIDE)
+							}, ratelimiter.QuotaMode_DIVIDE)
 						slog.Printf("v2 init request %d sent\n", idx)
 						err = stream.Send(initReq)
 						So(err, ShouldBeNil)
@@ -607,7 +608,7 @@ func TestClientUpAndDown(t *testing.T) {
 	slog.Printf("start the last report\n")
 	Convey(fmt.Sprintf("测试最后一次上报查询"), t, func() {
 		time.Sleep(4 * time.Second)
-		client := apiv2.NewRateLimitGRPCV2Client(conn)
+		client := ratelimiter.NewRateLimitGRPCV2Client(conn)
 		stream, err := client.Service(context.Background())
 		So(err, ShouldBeNil)
 		defer stream.CloseSend()
@@ -616,7 +617,7 @@ func TestClientUpAndDown(t *testing.T) {
 		initReq := buildInitRequestWitDuration(multiSvcName3, multiNamespace, multiMethodName,
 			clientId, map[time.Duration]uint32{
 				time.Second: total,
-			}, apiv2.QuotaMode_DIVIDE)
+			}, ratelimiter.QuotaMode_DIVIDE)
 		slog.Printf("v2 init request over sent\n")
 		err = stream.Send(initReq)
 		So(err, ShouldBeNil)
@@ -654,13 +655,13 @@ func TestMultiClientReconnect(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			Convey(fmt.Sprintf("测试客户端%d上报查询", idx), t, func() {
-				client := apiv2.NewRateLimitGRPCV2Client(conn)
+				client := ratelimiter.NewRateLimitGRPCV2Client(conn)
 				clientId := uuid.New().String()
 				for i := 0; i < 2; i++ {
 					func(idx int) {
 						stream, err := client.Service(context.Background())
 						So(err, ShouldBeNil)
-						defer func(theStream apiv2.RateLimitGRPCV2_ServiceClient) {
+						defer func(theStream ratelimiter.RateLimitGRPCV2_ServiceClient) {
 							go func() {
 								if idx == 0 {
 									fmt.Printf("start to wait 2s\n")
@@ -673,7 +674,7 @@ func TestMultiClientReconnect(t *testing.T) {
 							fmt.Sprintf("%s_%d", multiMethodName, i),
 							clientId, map[time.Duration]uint32{
 								time.Second: total,
-							}, apiv2.QuotaMode_WHOLE)
+							}, ratelimiter.QuotaMode_WHOLE)
 						slog.Printf("v2 init request %d sent\n", idx)
 						err = stream.Send(initReq)
 						So(err, ShouldBeNil)

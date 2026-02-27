@@ -170,7 +170,7 @@ func selfRegister(cfg *Registry, servers []apiserver.APIServer, serverAddress st
 				defer cancel()
 				resp, err := client.RegisterInstance(clientCtx, instance)
 				if nil != err {
-					log.Infof("[Bootstrap] fail to register instance %d:%s, err: %s", instance.GetHost().GetValue(), instance.GetPort().GetValue(), err)
+					log.Infof("[Bootstrap] fail to register instance %s:%d, err: %s", instance.GetHost().GetValue(), instance.GetPort().GetValue(), err)
 					return err
 				}
 				log.Infof("[Bootstrap] instance %s:%d registered, code %d", instance.GetHost().GetValue(), instance.GetPort().GetValue(), resp.GetCode().GetValue())

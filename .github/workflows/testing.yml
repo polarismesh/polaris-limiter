@@ -20,13 +20,17 @@ jobs:
     steps:
       # Setup the environment.
       - name: Setup Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: 1.21.0
       # Checkout latest code
       - name: Checkout repo
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       # Compile
       - name: Build server
         run: bash build.sh
+
+      # Run tests
+      - name: Run Tests
+        run: go test -v -cover ./...

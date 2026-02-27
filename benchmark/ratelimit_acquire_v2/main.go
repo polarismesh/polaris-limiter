@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 	"google.golang.org/grpc"
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
@@ -57,17 +58,17 @@ var (
 )
 
 // 构造初始化请求
-func buildInitRequest() *apiv2.RateLimitRequest {
-	req := &apiv2.RateLimitRequest{
-		Cmd: apiv2.RateLimitCmd_INIT,
-		RateLimitInitRequest: &apiv2.RateLimitInitRequest{
-			Target: &apiv2.LimitTarget{
+func buildInitRequest() *ratelimiter.RateLimitRequest {
+	req := &ratelimiter.RateLimitRequest{
+		Cmd: ratelimiter.RateLimitCmd_INIT,
+		RateLimitInitRequest: &ratelimiter.RateLimitInitRequest{
+			Target: &ratelimiter.LimitTarget{
 				Namespace: benchNamespace,
 				Service:   benchSvcName,
 				Labels:    fmt.Sprintf("method:%s", benchMethodName),
 			},
 			ClientId: uuid.New().String(),
-			Totals: []*apiv2.QuotaTotal{
+			Totals: []*ratelimiter.QuotaTotal{
 				{
 					Duration:  1,
 					MaxAmount: benchTotal,
@@ -79,12 +80,12 @@ func buildInitRequest() *apiv2.RateLimitRequest {
 }
 
 // 构造初始化请求
-func buildReportRequest(resp *apiv2.RateLimitInitResponse, baseTimeMilli int64) *apiv2.RateLimitRequest {
-	req := &apiv2.RateLimitRequest{
-		Cmd: apiv2.RateLimitCmd_ACQUIRE,
-		RateLimitReportRequest: &apiv2.RateLimitReportRequest{
+func buildReportRequest(resp *ratelimiter.RateLimitInitResponse, baseTimeMilli int64) *ratelimiter.RateLimitRequest {
+	req := &ratelimiter.RateLimitRequest{
+		Cmd: ratelimiter.RateLimitCmd_ACQUIRE,
+		RateLimitReportRequest: &ratelimiter.RateLimitReportRequest{
 			ClientKey: resp.ClientKey,
-			QuotaUses: []*apiv2.QuotaSum{
+			QuotaUses: []*ratelimiter.QuotaSum{
 				{
 					CounterKey: resp.Counters[0].CounterKey,
 					Used:       1,
@@ -98,17 +99,17 @@ func buildReportRequest(resp *apiv2.RateLimitInitResponse, baseTimeMilli int64) 
 
 // 执行初始化操作
 func doRateLimitInits(concurrency int) (
-	[]*apiv2.RateLimitInitResponse, []int64, []apiv2.RateLimitGRPCV2_ServiceClient, []*grpc.ClientConn) {
+	[]*ratelimiter.RateLimitInitResponse, []int64, []ratelimiter.RateLimitGRPCV2_ServiceClient, []*grpc.ClientConn) {
 	conns := make([]*grpc.ClientConn, 0, concurrency)
 	conn, err := grpc.Dial(serverAddress, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalln(err)
 	}
 	conns = append(conns, conn)
-	client := apiv2.NewRateLimitGRPCV2Client(conn)
-	initResponses := make([]*apiv2.RateLimitInitResponse, 0, concurrency)
+	client := ratelimiter.NewRateLimitGRPCV2Client(conn)
+	initResponses := make([]*ratelimiter.RateLimitInitResponse, 0, concurrency)
 	baseTimes := make([]int64, 0, concurrency)
-	streams := make([]apiv2.RateLimitGRPCV2_ServiceClient, 0, concurrency)
+	streams := make([]ratelimiter.RateLimitGRPCV2_ServiceClient, 0, concurrency)
 	for i := 0; i < concurrency; i++ {
 		stream, err := client.Service(context.Background())
 		if err != nil {
