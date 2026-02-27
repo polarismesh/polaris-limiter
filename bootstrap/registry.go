@@ -30,9 +30,9 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/polarismesh/polaris-limiter/apiserver"
-	polaris "github.com/polarismesh/polaris-limiter/pkg/api/polaris/v1"
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/pkg/version"
+	polaris "github.com/polarismesh/specification/source/go/api/v1/service_manage"
 )
 
 const (
