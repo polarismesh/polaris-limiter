@@ -59,7 +59,6 @@ func main() {
 	defer func() {
 		conn.Close()
 	}()
-	client := apiv2.NewRateLimitGRPCV2Client(conn)
 	client := ratelimiter.NewRateLimitGRPCV2Client(conn)
 	var allTotal float64
 	for i := 0; i < times; i++ {

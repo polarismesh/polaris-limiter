@@ -31,8 +31,6 @@ import (
 	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 )
 
 var (

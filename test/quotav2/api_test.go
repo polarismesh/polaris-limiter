@@ -355,12 +355,6 @@ func TestMultiThreadWholeInitAcquireQuery(t *testing.T) {
 }
 
 // 返回期待的总量
-func expectTotal(count int, total uint32, mode ratelimiter.QuotaMode) uint32 {
-	if mode == ratelimiter.QuotaMode_WHOLE {
-		return total
-	}
-	return total * uint32(count)
-}
 
 const IpPattern = "127.0.0.%d"
 
