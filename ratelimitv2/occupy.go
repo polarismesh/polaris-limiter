@@ -22,6 +22,7 @@ import (
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 )
 
 // OccupyAllocator 抢占式分配器
@@ -30,7 +31,7 @@ type OccupyAllocator struct {
 	slidingWindow *utils.SlidingWindow
 	// 配额已经用完
 	quotaUsedOff uint32
-	mode         apiv2.Mode
+	mode         ratelimiter.Mode
 	counter      CounterV2
 }
 
@@ -39,25 +40,25 @@ func NewOccupyAllocator(slideCount int, intervalMs int, pushManager PushManager,
 	return &OccupyAllocator{
 		pushManager:   pushManager,
 		slidingWindow: utils.NewSlidingWindow(slideCount, intervalMs),
-		mode:          apiv2.Mode_BATCH_OCCUPY,
+		mode:          ratelimiter.Mode_BATCH_OCCUPY,
 		counter:       counter,
 	}
 }
 
 // Mode 返回分配器所属的模式
-func (o *OccupyAllocator) Mode() apiv2.Mode {
+func (o *OccupyAllocator) Mode() ratelimiter.Mode {
 	return o.mode
 }
 
 // Allocate 分配配额
 func (o *OccupyAllocator) Allocate(
-	client Client, quotaSum *apiv2.QuotaSum, timestampMs int64, startTimeMicro int64) *apiv2.QuotaLeft {
+	client Client, quotaSum *ratelimiter.QuotaSum, timestampMs int64, startTimeMicro int64) *ratelimiter.QuotaLeft {
 	sumUsed := quotaSum.GetUsed()
 	sumLimit := quotaSum.GetLimited()
 	serverTimeMs := startTimeMicro / 1e3
 	totalUsed := o.slidingWindow.AddAndGetCurrent(timestampMs, serverTimeMs, sumUsed)
 	quotaLeft := int64(o.counter.MaxAmount()) - int64(totalUsed)
-	quotaLeftRet := &apiv2.QuotaLeft{
+	quotaLeftRet := &ratelimiter.QuotaLeft{
 		CounterKey:  quotaSum.GetCounterKey(),
 		Mode:        o.mode,
 		Left:        quotaLeft,
@@ -81,13 +82,13 @@ func (o *OccupyAllocator) Allocate(
 }
 
 // 启动推送
-func (o *OccupyAllocator) doPush(quotaLeft *apiv2.QuotaLeft, client Client, startTimeMicro int64) {
+func (o *OccupyAllocator) doPush(quotaLeft *ratelimiter.QuotaLeft, client Client, startTimeMicro int64) {
 	resp := apiv2.NewRateLimitReportResponse(apiv2.ExecuteSuccess)
 	resp.QuotaLefts = append(resp.QuotaLefts, quotaLeft)
 	pushValue := &PushValue{
 		Counter: o.counter,
-		Msg: &apiv2.RateLimitResponse{
-			Cmd:                     apiv2.RateLimitCmd_ACQUIRE,
+		Msg: &ratelimiter.RateLimitResponse{
+			Cmd:                     ratelimiter.RateLimitCmd_ACQUIRE,
 			RateLimitReportResponse: resp.ToRateLimitReportResponse(),
 		},
 		ExcludeClient:  client.ClientId(),

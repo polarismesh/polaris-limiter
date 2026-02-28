@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 	"google.golang.org/grpc"
 
-	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/plugin"
 	"github.com/polarismesh/polaris-limiter/ratelimitv2"
@@ -70,7 +70,7 @@ func (g *Server) Run(errCh chan error) {
 		grpc.UnaryInterceptor(g.unaryInterceptor),
 		grpc.StreamInterceptor(g.streamInterceptor),
 	)
-	apiv2.RegisterRateLimitGRPCV2Server(server, g.rateLimitServiceV2)
+	ratelimiter.RegisterRateLimitGRPCV2Server(server, g.rateLimitServiceV2)
 	g.server = server
 
 	serviceInfos := server.GetServiceInfo()

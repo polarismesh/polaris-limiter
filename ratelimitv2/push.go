@@ -21,7 +21,7 @@ import (
 	"context"
 	"errors"
 
-	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 )
 
 // PushManager 推送管理器
@@ -35,7 +35,7 @@ type PushManager interface {
 // PushValue 推送的值
 type PushValue struct {
 	Counter       CounterV2
-	Msg           *apiv2.RateLimitResponse
+	Msg           *ratelimiter.RateLimitResponse
 	ExcludeClient string
 	// StartTimeMicro 请求进入时间
 	StartTimeMicro int64

@@ -22,6 +22,7 @@ import (
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/config"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 )
 
 // 默认滑窗数量
@@ -31,7 +32,7 @@ const (
 )
 
 // CheckRateLimitReportRequest 检查限流上报请求参数
-func CheckRateLimitReportRequest(req *apiv2.RateLimitReportRequest) *apiv2.TimedRateLimitReportResponse {
+func CheckRateLimitReportRequest(req *ratelimiter.RateLimitReportRequest) *apiv2.TimedRateLimitReportResponse {
 	if req.GetClientKey() == 0 {
 		return apiv2.NewRateLimitReportResponse(apiv2.InvalidClientKey)
 	}
@@ -51,7 +52,7 @@ func CheckRateLimitReportRequest(req *apiv2.RateLimitReportRequest) *apiv2.Timed
 
 // 通用检查限流请求的参数
 func checkInitRequest(
-	req *apiv2.RateLimitInitRequest, defaultSlideCount uint32) (*apiv2.RateLimitInitResponse, time.Duration) {
+	req *ratelimiter.RateLimitInitRequest, defaultSlideCount uint32) (*ratelimiter.RateLimitInitResponse, time.Duration) {
 	if len(req.GetTarget().GetService()) == 0 {
 		return apiv2.NewRateLimitInitResponse(apiv2.InvalidServiceName, req.GetTarget()), 0
 	}
@@ -76,7 +77,7 @@ func checkInitRequest(
 	} else if req.GetSlideCount() > MaxSlideCount {
 		return apiv2.NewRateLimitInitResponse(apiv2.InvalidSlideCount, req.GetTarget()), 0
 	}
-	if req.GetMode() != apiv2.Mode_ADAPTIVE && req.GetMode() != apiv2.Mode_BATCH_OCCUPY {
+	if req.GetMode() != ratelimiter.Mode_ADAPTIVE && req.GetMode() != ratelimiter.Mode_BATCH_OCCUPY {
 		return apiv2.NewRateLimitInitResponse(apiv2.InvalidMode, req.GetTarget()), 0
 	}
 	return nil, maxDuration
@@ -84,7 +85,7 @@ func checkInitRequest(
 
 // CheckRateLimitInitRequest 检查限流初始化请求参数
 func CheckRateLimitInitRequest(
-	req *apiv2.RateLimitInitRequest, defaultSlideCount uint32) (*apiv2.RateLimitInitResponse, time.Duration) {
+	req *ratelimiter.RateLimitInitRequest, defaultSlideCount uint32) (*ratelimiter.RateLimitInitResponse, time.Duration) {
 	if len(req.GetClientId()) == 0 {
 		return apiv2.NewRateLimitInitResponse(apiv2.InvalidClientId, req.GetTarget()), 0
 	}
@@ -93,7 +94,7 @@ func CheckRateLimitInitRequest(
 
 // CheckRateLimitBatchInitRequest 检查限流初始化请求参数
 func CheckRateLimitBatchInitRequest(
-	req *apiv2.RateLimitInitRequest, defaultSlideCount uint32) (*apiv2.RateLimitInitResponse, time.Duration) {
+	req *ratelimiter.RateLimitInitRequest, defaultSlideCount uint32) (*ratelimiter.RateLimitInitResponse, time.Duration) {
 	if len(req.GetTarget().GetLabelsList()) == 0 {
 		return apiv2.NewRateLimitInitResponse(apiv2.InvalidLabels, req.GetTarget()), 0
 	}

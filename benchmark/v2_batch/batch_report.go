@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -57,7 +58,7 @@ var (
 type Client struct {
 	idx          int
 	conn         *grpc.ClientConn
-	stream       apiv2.RateLimitGRPCV2_ServiceClient
+	stream       ratelimiter.RateLimitGRPCV2_ServiceClient
 	clientId     string
 	lastUid      int
 	clientKey    uint32
@@ -69,13 +70,13 @@ type Client struct {
 func (client *Client) Send() {
 	if client.lastUid <= labelCount || client.lastInitTime+expireInterval < time.Now().Second() { // 先初始化
 		client.lastUid++
-		req := &apiv2.RateLimitRequest{
-			Cmd: apiv2.RateLimitCmd_INIT,
-			RateLimitInitRequest: &apiv2.RateLimitInitRequest{
-				Target: &apiv2.LimitTarget{Namespace: benchNamespace, Service: benchSvcName,
+		req := &ratelimiter.RateLimitRequest{
+			Cmd: ratelimiter.RateLimitCmd_INIT,
+			RateLimitInitRequest: &ratelimiter.RateLimitInitRequest{
+				Target: &ratelimiter.LimitTarget{Namespace: benchNamespace, Service: benchSvcName,
 					Labels: fmt.Sprintf("uin:abcde_%d", client.lastUid)},
 				ClientId: client.clientId,
-				Totals:   []*apiv2.QuotaTotal{{Duration: 1, MaxAmount: benchTotal}}},
+				Totals:   []*ratelimiter.QuotaTotal{{Duration: 1, MaxAmount: benchTotal}}},
 		}
 		err := client.stream.Send(req)
 		if err != nil {
@@ -89,11 +90,11 @@ func (client *Client) Send() {
 	clientKey := atomic.LoadUint32(&client.clientKey)
 	if clientKey > 0 { // 检查是否有初始化请求完成
 		client.mutex.Lock()
-		req := &apiv2.RateLimitRequest{
-			Cmd: apiv2.RateLimitCmd_ACQUIRE,
-			RateLimitReportRequest: &apiv2.RateLimitReportRequest{
+		req := &ratelimiter.RateLimitRequest{
+			Cmd: ratelimiter.RateLimitCmd_ACQUIRE,
+			RateLimitReportRequest: &ratelimiter.RateLimitReportRequest{
 				ClientKey: client.clientKey,
-				QuotaUses: []*apiv2.QuotaSum{{
+				QuotaUses: []*ratelimiter.QuotaSum{{
 					CounterKey: client.counterKeys[sentCount%len(client.counterKeys)],
 					Used:       1}},
 				Timestamp: time.Now().UnixNano() / 1e6,
@@ -121,7 +122,7 @@ func (client *Client) Recv() {
 		}
 		log.Fatalln(err)
 	}
-	if resp.Cmd == apiv2.RateLimitCmd_INIT {
+	if resp.Cmd == ratelimiter.RateLimitCmd_INIT {
 		counterKey := resp.RateLimitInitResponse.GetCounters()[0].CounterKey
 		client.mutex.Lock()
 		mapLen := len(client.counterKeys)
@@ -146,13 +147,13 @@ func (client *Client) BatchSend() {
 		}
 		client.lastUid = labelCount
 
-		initRequests := make([]*apiv2.RateLimitInitRequest, 0, 1)
-		initRequests = append(initRequests, &apiv2.RateLimitInitRequest{
-			Target: &apiv2.LimitTarget{Namespace: benchNamespace, Service: benchSvcName, LabelsList: labels},
-			Totals: []*apiv2.QuotaTotal{{Duration: 1, MaxAmount: benchTotal}}})
-		req := &apiv2.RateLimitRequest{
-			Cmd: apiv2.RateLimitCmd_BATCH_INIT,
-			RateLimitBatchInitRequest: &apiv2.RateLimitBatchInitRequest{
+		initRequests := make([]*ratelimiter.RateLimitInitRequest, 0, 1)
+		initRequests = append(initRequests, &ratelimiter.RateLimitInitRequest{
+			Target: &ratelimiter.LimitTarget{Namespace: benchNamespace, Service: benchSvcName, LabelsList: labels},
+			Totals: []*ratelimiter.QuotaTotal{{Duration: 1, MaxAmount: benchTotal}}})
+		req := &ratelimiter.RateLimitRequest{
+			Cmd: ratelimiter.RateLimitCmd_BATCH_INIT,
+			RateLimitBatchInitRequest: &ratelimiter.RateLimitBatchInitRequest{
 				ClientId: client.clientId,
 				Request:  initRequests,
 			},
@@ -176,13 +177,13 @@ func (client *Client) BatchSend() {
 		client.lastUid++
 		client.lastInitTime = time.Now().Second()
 
-		req := &apiv2.RateLimitRequest{
-			Cmd: apiv2.RateLimitCmd_INIT,
-			RateLimitInitRequest: &apiv2.RateLimitInitRequest{
-				Target: &apiv2.LimitTarget{Namespace: benchNamespace, Service: benchSvcName,
+		req := &ratelimiter.RateLimitRequest{
+			Cmd: ratelimiter.RateLimitCmd_INIT,
+			RateLimitInitRequest: &ratelimiter.RateLimitInitRequest{
+				Target: &ratelimiter.LimitTarget{Namespace: benchNamespace, Service: benchSvcName,
 					Labels: fmt.Sprintf("uin:abcde_%d", client.lastUid)},
 				ClientId: client.clientId,
-				Totals:   []*apiv2.QuotaTotal{{Duration: 1, MaxAmount: benchTotal}}},
+				Totals:   []*ratelimiter.QuotaTotal{{Duration: 1, MaxAmount: benchTotal}}},
 		}
 		err := client.stream.Send(req)
 		if err != nil {
@@ -193,15 +194,15 @@ func (client *Client) BatchSend() {
 	}
 
 	client.mutex.Lock()
-	quotaUses := make([]*apiv2.QuotaSum, 0, len(client.counterKeys))
+	quotaUses := make([]*ratelimiter.QuotaSum, 0, len(client.counterKeys))
 	for _, value := range client.counterKeys {
-		quotaUses = append(quotaUses, &apiv2.QuotaSum{CounterKey: value, Used: 1})
+		quotaUses = append(quotaUses, &ratelimiter.QuotaSum{CounterKey: value, Used: 1})
 	}
 	client.mutex.Unlock()
 
-	req := &apiv2.RateLimitRequest{
-		Cmd: apiv2.RateLimitCmd_BATCH_ACQUIRE,
-		RateLimitReportRequest: &apiv2.RateLimitReportRequest{
+	req := &ratelimiter.RateLimitRequest{
+		Cmd: ratelimiter.RateLimitCmd_BATCH_ACQUIRE,
+		RateLimitReportRequest: &ratelimiter.RateLimitReportRequest{
 			ClientKey: client.clientKey,
 			QuotaUses: quotaUses,
 			Timestamp: time.Now().UnixNano() / 1e6,
@@ -224,7 +225,7 @@ func (client *Client) BatchRecv() {
 		}
 		log.Fatalln(err)
 	}
-	if resp.Cmd == apiv2.RateLimitCmd_BATCH_INIT && resp.GetRateLimitBatchInitResponse() != nil {
+	if resp.Cmd == ratelimiter.RateLimitCmd_BATCH_INIT && resp.GetRateLimitBatchInitResponse() != nil {
 		counter := resp.RateLimitBatchInitResponse.Result[0].Counters
 		client.mutex.Lock()
 		counterLen := len(counter)
@@ -240,7 +241,7 @@ func (client *Client) BatchRecv() {
 		if resp.RateLimitBatchInitResponse.ClientKey > 0 {
 			atomic.StoreUint32(&client.clientKey, resp.RateLimitBatchInitResponse.ClientKey)
 		}
-	} else if resp.Cmd == apiv2.RateLimitCmd_INIT {
+	} else if resp.Cmd == ratelimiter.RateLimitCmd_INIT {
 		counterKey := resp.RateLimitInitResponse.GetCounters()[0].CounterKey
 		client.mutex.Lock()
 		mapLen := len(client.counterKeys)
@@ -271,7 +272,7 @@ func createStream(concurrency int) []*Client {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		stream, err := apiv2.NewRateLimitGRPCV2Client(conn).Service(context.Background())
+		stream, err := ratelimiter.NewRateLimitGRPCV2Client(conn).Service(context.Background())
 		if err != nil {
 			log.Fatalln(err)
 		}

@@ -22,16 +22,17 @@ import (
 	"fmt"
 
 	"github.com/modern-go/reflect2"
-
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
+
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 	"github.com/polarismesh/polaris-limiter/plugin"
 )
 
 // InitializeClient 初始化客户端
-func (s *Server) InitializeClient(request *apiv2.RateLimitInitRequest,
-	client Client, clientIP *utils.IPAddress, streamContext *StreamContext) (*apiv2.RateLimitInitResponse, Client) {
+func (s *Server) InitializeClient(request *ratelimiter.RateLimitInitRequest,
+	client Client, clientIP *utils.IPAddress, streamContext *StreamContext) (*ratelimiter.RateLimitInitResponse, Client) {
 	if !reflect2.IsNil(client) {
 		if client.ClientId() != request.ClientId {
 			return apiv2.NewRateLimitInitResponse(apiv2.ExceedMaxClientOneStream, request.GetTarget()), client
@@ -46,8 +47,8 @@ func (s *Server) InitializeClient(request *apiv2.RateLimitInitRequest,
 }
 
 // InitializeClientBatch 初始化客户端
-func (s *Server) InitializeClientBatch(request *apiv2.RateLimitBatchInitRequest, client Client,
-	clientIP *utils.IPAddress, streamContext *StreamContext) (*apiv2.RateLimitBatchInitResponse, Client) {
+func (s *Server) InitializeClientBatch(request *ratelimiter.RateLimitBatchInitRequest, client Client,
+	clientIP *utils.IPAddress, streamContext *StreamContext) (*ratelimiter.RateLimitBatchInitResponse, Client) {
 	if !reflect2.IsNil(client) {
 		if client.ClientId() != request.ClientId {
 			return apiv2.NewRateLimitBatchInitResponse(apiv2.ExceedMaxClientOneStream), client
@@ -63,7 +64,7 @@ func (s *Server) InitializeClientBatch(request *apiv2.RateLimitBatchInitRequest,
 
 // InitializeQuota 限流KEY初始化
 func (s *Server) InitializeQuota(ctx context.Context, client Client,
-	request *apiv2.RateLimitInitRequest) (*apiv2.RateLimitInitResponse, CounterV2) {
+	request *ratelimiter.RateLimitInitRequest) (*ratelimiter.RateLimitInitResponse, CounterV2) {
 	log.Info(fmt.Sprintf("get v2 init request: %+v", request), utils.ZapRequestID(ctx))
 	resp, maxDuration := CheckRateLimitInitRequest(request, s.cfg.SlideCount)
 	if nil != resp { // 请求不合法：缺失字段
@@ -71,7 +72,7 @@ func (s *Server) InitializeQuota(ctx context.Context, client Client,
 	}
 	var code = apiv2.ExecuteSuccess
 	// 然后加入counter
-	counters := make([]*apiv2.QuotaCounter, 0, len(request.GetTotals()))
+	counters := make([]*ratelimiter.QuotaCounter, 0, len(request.GetTotals()))
 	expireDuration := 2 * maxDuration
 	nowMs := utils.CurrentMillisecond()
 	var cCounter CounterV2
@@ -83,7 +84,7 @@ func (s *Server) InitializeQuota(ctx context.Context, client Client,
 		}
 		cCounter = counter
 		left := counter.SumQuota(client, nowMs)
-		counters = append(counters, &apiv2.QuotaCounter{
+		counters = append(counters, &ratelimiter.QuotaCounter{
 			Duration:    total.GetDuration(),
 			CounterKey:  s.boxCounterKey(left.GetCounterKey()),
 			Left:        left.GetLeft(),
@@ -103,7 +104,7 @@ func (s *Server) InitializeQuota(ctx context.Context, client Client,
 
 // BatchInitializeQuota 限流KEY初始化
 func (s *Server) BatchInitializeQuota(ctx context.Context, client Client,
-	request *apiv2.RateLimitBatchInitRequest) (*apiv2.RateLimitBatchInitResponse, CounterV2) {
+	request *ratelimiter.RateLimitBatchInitRequest) (*ratelimiter.RateLimitBatchInitResponse, CounterV2) {
 	log.Info(fmt.Sprintf("get v2 batch init request: %+v", request), utils.ZapRequestID(ctx))
 	if len(request.GetRequest()) == 0 { // 请求不合法：缺失字段
 		return apiv2.NewRateLimitBatchInitResponse(apiv2.InvalidBatchInitReq), nil
@@ -115,9 +116,9 @@ func (s *Server) BatchInitializeQuota(ctx context.Context, client Client,
 	var cCounter CounterV2
 	resp := apiv2.NewRateLimitBatchInitResponse(apiv2.ExecuteSuccess)
 	resp.ClientKey = client.ClientKey()
-	resp.Result = make([]*apiv2.BatchInitResult, 0, len(request.GetRequest()))
+	resp.Result = make([]*ratelimiter.BatchInitResult, 0, len(request.GetRequest()))
 	for _, initReq := range request.GetRequest() {
-		initResult := &apiv2.BatchInitResult{
+		initResult := &ratelimiter.BatchInitResult{
 			Code:       uint32(apiv2.ExecuteSuccess),
 			SlideCount: initReq.GetSlideCount()}
 
@@ -128,18 +129,18 @@ func (s *Server) BatchInitializeQuota(ctx context.Context, client Client,
 			resp.Result = append(resp.Result, initResult)
 			continue
 		}
-		initResult.Target = &apiv2.LimitTarget{
+		initResult.Target = &ratelimiter.LimitTarget{
 			Namespace: initReq.GetTarget().GetNamespace(),
 			Service:   initReq.GetTarget().GetService()}
 
 		labelsList := initReq.GetTarget().GetLabelsList()
 		// 加入counter，总数为labels数量*规则里配置的配额数
-		initResult.Counters = make([]*apiv2.LabeledQuotaCounter, 0, len(labelsList)*len(initReq.GetTotals()))
+		initResult.Counters = make([]*ratelimiter.LabeledQuotaCounter, 0, len(labelsList)*len(initReq.GetTotals()))
 		expireDuration := 2 * maxDuration
 		nowMs := utils.CurrentMillisecond()
 
 		for _, label := range labelsList {
-			counters := make([]*apiv2.QuotaCounter, 0, len(initReq.GetTotals()))
+			counters := make([]*ratelimiter.QuotaCounter, 0, len(initReq.GetTotals()))
 			for idx, total := range initReq.GetTotals() {
 				initReq.GetTarget().Labels = label
 				cCode, counter := s.counterMng.AddCounter(initReq, idx, client, expireDuration)
@@ -149,7 +150,7 @@ func (s *Server) BatchInitializeQuota(ctx context.Context, client Client,
 				}
 				cCounter = counter
 				left := counter.SumQuota(client, nowMs)
-				counters = append(counters, &apiv2.QuotaCounter{
+				counters = append(counters, &ratelimiter.QuotaCounter{
 					Duration:    total.GetDuration(),
 					CounterKey:  s.boxCounterKey(left.GetCounterKey()),
 					Left:        left.GetLeft(),
@@ -157,7 +158,7 @@ func (s *Server) BatchInitializeQuota(ctx context.Context, client Client,
 					ClientCount: counter.ClientCount(),
 				})
 			}
-			labeledCounter := &apiv2.LabeledQuotaCounter{Labels: label, Counters: counters}
+			labeledCounter := &ratelimiter.LabeledQuotaCounter{Labels: label, Counters: counters}
 			initResult.Counters = append(initResult.Counters, labeledCounter)
 		}
 		resp.Result = append(resp.Result, initResult)
@@ -182,7 +183,7 @@ func (s *Server) unboxCounterKey(counterKey uint32) (apiv2.Code, uint32) {
 }
 
 // AcquireQuota 获取限流配额
-func (s *Server) AcquireQuota(client Client, startTimeMicro int64, request *apiv2.RateLimitReportRequest,
+func (s *Server) AcquireQuota(client Client, startTimeMicro int64, request *ratelimiter.RateLimitReportRequest,
 	collector *plugin.RateLimitStatCollectorV2) (*apiv2.TimedRateLimitReportResponse, CounterV2) {
 	resp := CheckRateLimitReportRequest(request)
 	if nil != resp {
@@ -191,7 +192,7 @@ func (s *Server) AcquireQuota(client Client, startTimeMicro int64, request *apiv
 
 	var code = apiv2.ExecuteSuccess
 	var counter CounterV2
-	var quotaLefts = make([]*apiv2.QuotaLeft, 0, len(request.GetQuotaUses()))
+	var quotaLefts = make([]*ratelimiter.QuotaLeft, 0, len(request.GetQuotaUses()))
 	for idx, used := range request.GetQuotaUses() {
 		var counterKey uint32
 		code, counterKey = s.unboxCounterKey(used.GetCounterKey())

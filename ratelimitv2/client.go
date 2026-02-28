@@ -22,8 +22,8 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 
-	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
@@ -36,7 +36,7 @@ type Client interface {
 	// ClientId 获取客户端ID
 	ClientId() string
 	// SendAndUpdate 发送
-	SendAndUpdate(*apiv2.RateLimitResponse, *ClientSendTime, int64) (bool, error)
+	SendAndUpdate(*ratelimiter.RateLimitResponse, *ClientSendTime, int64) (bool, error)
 	// UpdateStreamContext 更新流上下文，返回该stream是否已经更新成功
 	UpdateStreamContext(streamCtx *StreamContext) bool
 	// Cleanup 清理所有上下文信息
@@ -69,7 +69,7 @@ func (s *StreamContext) ContextId() string {
 }
 
 // Send 发送消息
-func (s *StreamContext) Send(resp *apiv2.RateLimitResponse) error {
+func (s *StreamContext) Send(resp *ratelimiter.RateLimitResponse) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	return s.stream.Send(resp)
@@ -78,7 +78,7 @@ func (s *StreamContext) Send(resp *apiv2.RateLimitResponse) error {
 // Stream 应答发送Stream
 type Stream interface {
 	// Send 推送应答
-	Send(*apiv2.RateLimitResponse) error
+	Send(*ratelimiter.RateLimitResponse) error
 }
 
 // NewClient 新建客户端
@@ -175,12 +175,12 @@ func (c *client) SameContext(ctxId string) bool {
 
 // SendAndUpdate 发送及更新
 func (c *client) SendAndUpdate(
-	resp *apiv2.RateLimitResponse, clientSendTime *ClientSendTime, msgTimeMicro int64) (bool, error) {
+	resp *ratelimiter.RateLimitResponse, clientSendTime *ClientSendTime, msgTimeMicro int64) (bool, error) {
 	var streamCtx *StreamContext
 	c.mutex.RLock()
 	streamCtx = c.streamCtx
 	c.mutex.RUnlock()
-	if resp.Cmd == apiv2.RateLimitCmd_ACQUIRE {
+	if resp.Cmd == ratelimiter.RateLimitCmd_ACQUIRE {
 		if nil == clientSendTime || nil == streamCtx {
 			return false, nil
 		}
