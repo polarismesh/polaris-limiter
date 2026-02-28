@@ -18,7 +18,7 @@
 package version
 
 var (
-	Version   = "v2.0.0"
+	Version   = "v1.2.0"
 	BuildDate string
 )
 
