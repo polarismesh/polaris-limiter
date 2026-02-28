@@ -28,6 +28,7 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 )
@@ -100,7 +101,7 @@ func buildReportRequest(resp *apiv2.RateLimitInitResponse, baseTimeMilli int64) 
 func doRateLimitInits(concurrency int) (
 	[]*apiv2.RateLimitInitResponse, []int64, []apiv2.RateLimitGRPCV2_ServiceClient, []*grpc.ClientConn) {
 	conns := make([]*grpc.ClientConn, 0, concurrency)
-	conn, err := grpc.Dial(serverAddress, grpc.WithInsecure())
+	conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -126,7 +127,7 @@ func doRateLimitInits(concurrency int) (
 			log.Fatalln(err)
 		}
 		if resp.RateLimitInitResponse.Code != uint32(apiv2.ExecuteSuccess) {
-			log.Fatalln(fmt.Sprintf("fail to init, response is %+v", resp))
+			log.Fatalf("fail to init, response is %+v", resp)
 		}
 		streams = append(streams, stream)
 		initResponses = append(initResponses, resp.RateLimitInitResponse)
@@ -139,13 +140,13 @@ func doRateLimitInits(concurrency int) (
 func main() {
 	initArgs()
 	flag.Parse()
-	log.Println(fmt.Sprintf("Client running ..., server address is %s", serverAddress))
+	log.Printf("Client running ..., server address is %s", serverAddress)
 
 	initResponses, baseTimes, streams, conns := doRateLimitInits(concurrency)
 	defer func() {
 		for _, stream := range streams {
 			if nil != stream {
-				stream.CloseSend()
+				_ = stream.CloseSend()
 			}
 		}
 		for _, conn := range conns {
@@ -158,7 +159,8 @@ func main() {
 	wg.Add(concurrency)
 	var err error
 	for i := 0; i < concurrency; i++ {
-		timeoutCtx, _ := context.WithTimeout(context.Background(), timeout)
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), timeout)
+		defer timeoutCancel()
 		go func(idx int) {
 			for {
 				select {

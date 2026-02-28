@@ -19,12 +19,14 @@ package http
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
 	"github.com/emicklei/go-restful"
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	api "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/log"
@@ -43,7 +45,13 @@ func (h *Handler) ParseProto(obj proto.Message) error {
 	ctx := requestCtx(h.req)
 	h.ctx = ctx
 
-	if err := jsonpb.Unmarshal(h.req.Request.Body, obj); err != nil {
+	body, err := io.ReadAll(h.req.Request.Body)
+	if err != nil {
+		log.Error(err.Error(), utils.ZapRequestID(ctx))
+		return err
+	}
+
+	if err := (protojson.UnmarshalOptions{}).Unmarshal(body, obj); err != nil {
 		log.Error(err.Error(), utils.ZapRequestID(ctx))
 		return err
 	}
@@ -58,13 +66,18 @@ func (h *Handler) ResponseProto(code api.Code, obj proto.Message) {
 	}
 	status := api.Code2HTTPStatus(code)
 	if status != http.StatusOK {
-		log.Error(obj.String(), utils.ZapRequestID(h.ctx))
+		log.Error(fmt.Sprintf("%v", obj), utils.ZapRequestID(h.ctx))
 	}
 
 	h.rsp.AddHeader("Request-Id", utils.ParseRequestID(h.ctx))
 	h.rsp.WriteHeader(status)
-	m := jsonpb.Marshaler{Indent: " "}
-	if err := m.Marshal(h.rsp, obj); err != nil {
+	m := protojson.MarshalOptions{Indent: " "}
+	data, err := m.Marshal(obj)
+	if err != nil {
+		log.Error(err.Error(), utils.ZapRequestID(h.ctx))
+		return
+	}
+	if _, err := h.rsp.Write(data); err != nil {
 		log.Error(err.Error(), utils.ZapRequestID(h.ctx))
 		return
 	}

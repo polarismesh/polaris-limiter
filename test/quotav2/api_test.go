@@ -29,6 +29,7 @@ import (
 	"github.com/google/uuid"
 	. "github.com/smartystreets/goconvey/convey"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
 	_ "github.com/polarismesh/polaris-limiter/apiserver/grpc"
@@ -54,7 +55,7 @@ func init() {
 }
 
 const (
-	mockServerAddr = "127.0.0.1:8081"
+	mockServerAddr = "127.0.0.1:8101"
 	timeout        = 1 * time.Second
 )
 
@@ -130,7 +131,7 @@ func buildAcquireRequestWitDuration(initResp *apiv2.RateLimitInitResponse,
 func TestSingleThreadInitAcquireQuery(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		opts = append(opts, grpc.WithBlock())
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -201,7 +202,7 @@ func TestSingleThreadInitAcquireQuery(t *testing.T) {
 func TestSingleThreadStreamingFail(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		opts = append(opts, grpc.WithBlock())
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -265,7 +266,7 @@ func TestSingleThreadStreamingFail(t *testing.T) {
 			time.Sleep(4 * time.Millisecond)
 		}
 		for _, stream := range streams {
-			stream.CloseSend()
+			_ = stream.CloseSend()
 		}
 	})
 	time.Sleep(2 * time.Second)
@@ -277,7 +278,7 @@ func TestSingleThreadStreamingFail(t *testing.T) {
 func TestSingleThreadStreamingQuery(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		opts = append(opts, grpc.WithBlock())
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -336,7 +337,7 @@ func TestSingleThreadStreamingQuery(t *testing.T) {
 				slog.Printf("end quota limited\n")
 				limited = 0
 			}
-			stream.CloseSend()
+			_ = stream.CloseSend()
 			time.Sleep(4 * time.Millisecond)
 		}
 	})
@@ -350,14 +351,6 @@ func TestMultiThreadDivideInitAcquireQuery(t *testing.T) {
 // 单机均摊阈值的测试
 func TestMultiThreadWholeInitAcquireQuery(t *testing.T) {
 	testMultiThreadInitAcquireQuery(t, multiSvcName2, multiWholeTotal, apiv2.QuotaMode_WHOLE)
-}
-
-// 返回期待的总量
-func expectTotal(count int, total uint32, mode apiv2.QuotaMode) uint32 {
-	if mode == apiv2.QuotaMode_WHOLE {
-		return total
-	}
-	return total * uint32(count)
 }
 
 const IpPattern = "127.0.0.%d"
@@ -430,7 +423,7 @@ func testRateLimitInOneThread(idx int, wg *sync.WaitGroup, t *testing.T,
 // 配额汇总结果查询，对于确切的key查询，期望返回当前的key的汇总查询结果
 func testMultiThreadInitAcquireQuery(t *testing.T, svcName string, total uint32, mode apiv2.QuotaMode) {
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	opts = append(opts, grpc.WithBlock())
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -458,7 +451,7 @@ func testMultiThreadInitAcquireQuery(t *testing.T, svcName string, total uint32,
 func TestSingleThreadLongAcquireQuery(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		opts = append(opts, grpc.WithBlock())
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -488,7 +481,8 @@ func TestSingleThreadLongAcquireQuery(t *testing.T) {
 		// 处理测试逻辑
 		var total uint32
 		var limited uint32
-		timeoutCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), 25*time.Second)
+		defer timeoutCancel()
 	L1:
 		for {
 			select {
@@ -535,7 +529,7 @@ func TestSingleThreadLongAcquireQuery(t *testing.T) {
 func TestTimeAdjust(t *testing.T) {
 	Convey("测试单线程初始化上报查询", t, func() {
 		var opts []grpc.DialOption
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		opts = append(opts, grpc.WithBlock())
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -558,7 +552,7 @@ func TestTimeAdjust(t *testing.T) {
 // 测试客户端上下线
 func TestClientUpAndDown(t *testing.T) {
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	opts = append(opts, grpc.WithBlock())
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -584,7 +578,7 @@ func TestClientUpAndDown(t *testing.T) {
 					func() {
 						stream, err := client.Service(context.Background())
 						So(err, ShouldBeNil)
-						defer stream.CloseSend()
+						defer func() { _ = stream.CloseSend() }()
 						clientId := uuid.New().String()
 						initReq := buildInitRequestWitDuration(multiSvcName3, multiNamespace, multiMethodName,
 							clientId, map[time.Duration]uint32{
@@ -605,12 +599,12 @@ func TestClientUpAndDown(t *testing.T) {
 	}
 	wg.Wait()
 	slog.Printf("start the last report\n")
-	Convey(fmt.Sprintf("测试最后一次上报查询"), t, func() {
+	Convey("测试最后一次上报查询", t, func() {
 		time.Sleep(4 * time.Second)
 		client := apiv2.NewRateLimitGRPCV2Client(conn)
 		stream, err := client.Service(context.Background())
 		So(err, ShouldBeNil)
-		defer stream.CloseSend()
+		defer func() { _ = stream.CloseSend() }()
 		clientId := uuid.New().String()
 		slog.Printf("clientId is %s, time is %s\n", clientId, time.Now())
 		initReq := buildInitRequestWitDuration(multiSvcName3, multiNamespace, multiMethodName,
@@ -633,7 +627,7 @@ func TestClientUpAndDown(t *testing.T) {
 // 测试客户端上下线
 func TestMultiClientReconnect(t *testing.T) {
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	opts = append(opts, grpc.WithBlock())
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -666,7 +660,7 @@ func TestMultiClientReconnect(t *testing.T) {
 									fmt.Printf("start to wait 2s\n")
 									time.Sleep(1 * time.Second)
 								}
-								theStream.CloseSend()
+								_ = theStream.CloseSend()
 							}()
 						}(stream)
 						initReq := buildInitRequestWitDuration(multiSvcName4, multiNamespace,

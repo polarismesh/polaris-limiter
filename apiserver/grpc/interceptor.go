@@ -93,7 +93,7 @@ func newInterceptor(ctx context.Context, server *Server, fullMethod string) *int
 func (i *interceptor) preProcess() {
 	if log.DebugEnabled() {
 		i.startTime = time.Unix(0, utils.CurrentNanosecond())
-		log.Debugf("receive request", utils.ZapRequestID(i.ctx), utils.ZapClientAddr(i.ctx),
+		log.Debug("receive request", utils.ZapRequestID(i.ctx), utils.ZapClientAddr(i.ctx),
 			utils.ZapUserAgent(i.ctx), utils.ZapMethod(i.fullMethod))
 	}
 }

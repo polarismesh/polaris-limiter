@@ -149,7 +149,7 @@ func stopServers(servers []apiserver.APIServer) {
 
 // 程序主循环
 func runMainLoop(servers []apiserver.APIServer, errCh chan error) {
-	sigCh := make(chan os.Signal)
+	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, syscall.SIGSEGV)
 	for {
 		select {

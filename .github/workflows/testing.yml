@@ -28,6 +28,16 @@ jobs:
           go-version-file: 'go.mod'
           cache: false
 
+      # Lint
+      - name: Run Linter
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
       # Compile
       - name: Build server
         run: bash build.sh
+
+      # Run tests
+      - name: Run Tests
+        run: go test -v -cover ./...

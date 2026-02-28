@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
@@ -47,7 +48,7 @@ func main() {
 	initArgs()
 	flag.Parse()
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	opts = append(opts, grpc.WithBlock())
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
@@ -59,7 +60,6 @@ func main() {
 		conn.Close()
 	}()
 	client := apiv2.NewRateLimitGRPCV2Client(conn)
-	var totalDiffs []float64
 	var allTotal float64
 	for i := 0; i < times; i++ {
 		startTime := utils.CurrentMillisecond()
@@ -71,7 +71,6 @@ func main() {
 		curDiffRound := math.Abs(float64(servTime.ServerTimestamp - startTime + (endTime - servTime.ServerTimestamp)))
 		curDiff := curDiffRound / 2
 		fmt.Printf("diff is %.2f for round %d\n", curDiff, i)
-		totalDiffs = append(totalDiffs, curDiff)
 		allTotal += curDiff
 	}
 	fmt.Printf("avg diff is %.2f\n", allTotal/float64(times))

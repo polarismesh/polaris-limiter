@@ -62,7 +62,6 @@ func (s *StaticsWorker) CreateRateLimitStatCollectorV2() *plugin.RateLimitStatCo
 
 // 归还采集器
 func (s *StaticsWorker) DropRateLimitStatCollector(collector plugin.RateLimitStatCollector) {
-	return
 }
 
 // 服务方法调用结果反馈，含有规则的计算周期

@@ -109,9 +109,9 @@ func (cc *CounterClients) AddSender(sender Client, counter *counterV2) {
 	cc.clientSenders.Store(sender.ClientKey(), &ClientSendTime{
 		curClient: sender,
 	})
-	clientKeys, ok := cc.clientIds[sender.ClientId()]
+	_, ok := cc.clientIds[sender.ClientId()]
 	if !ok {
-		clientKeys = make(map[uint32]bool, 0)
+		clientKeys := make(map[uint32]bool, 0)
 		clientKeys[sender.ClientKey()] = true
 		cc.clientIds[sender.ClientId()] = clientKeys
 	}
@@ -149,7 +149,7 @@ func (cc *CounterClients) DelSender(sender Client, counter *counterV2, counterEx
 	clientKeys, ok := cc.clientIds[sender.ClientId()]
 	if !ok {
 		// 已经不存在或者已经被置换，则不进行删除，一般不会出现
-		log.Warnf("[RateLimit]clientId %s not exist when del sender %s", sender.ClientId(), sender.ClientKey())
+		log.Warnf("[RateLimit]clientId %s not exist when del sender %d", sender.ClientId(), sender.ClientKey())
 		return
 	}
 	if !counterExpired && !sender.IsDetached() {
@@ -202,8 +202,6 @@ type counterV2 struct {
 	maxAmount uint32
 	// 阈值模式，全局模式还是单机均摊模式
 	amountMode int32
-	// 配额已经用完
-	quotaUsedOff uint32
 	// 配额分配器
 	allocator QuotaAllocator
 	// 计数器客户端集合

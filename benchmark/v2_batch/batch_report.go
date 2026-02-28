@@ -29,6 +29,7 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 )
@@ -258,7 +259,7 @@ func (client *Client) BatchRecv() {
 
 // 关闭客户端
 func (client *Client) Close() {
-	client.stream.CloseSend()
+	_ = client.stream.CloseSend()
 	client.conn.Close()
 }
 
@@ -266,7 +267,7 @@ func (client *Client) Close() {
 func createStream(concurrency int) []*Client {
 	clients := make([]*Client, 0, concurrency)
 	for i := 0; i < concurrency; i++ {
-		conn, err := grpc.Dial(serverAddress, grpc.WithInsecure())
+		conn, err := grpc.Dial(serverAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -294,7 +295,8 @@ func runBench() {
 	wg.Add(concurrency)
 
 	for i := 0; i < concurrency; i++ {
-		timeoutCtx, _ := context.WithTimeout(context.Background(), timeout)
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), timeout)
+		defer timeoutCancel()
 		go func(idx int) {
 			for {
 				select {
@@ -337,7 +339,8 @@ func runBatchBench() {
 	wg.Add(concurrency)
 
 	for i := 0; i < concurrency; i++ {
-		timeoutCtx, _ := context.WithTimeout(context.Background(), timeout)
+		timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), timeout)
+		defer timeoutCancel()
 		go func(idx int) {
 			for {
 				select {
@@ -376,7 +379,7 @@ func main() {
 	flag.IntVar(&expireInterval, "expire", 10, "expire interval")
 	flag.IntVar(&batchCount, "batch", 1, "batch count ")
 	flag.Parse()
-	log.Println(fmt.Sprintf("Client running ..., server address is %s", serverAddress))
+	log.Printf("Client running ..., server address is %s", serverAddress)
 
 	if batchCount > 1 {
 		runBatchBench()

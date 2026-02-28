@@ -114,7 +114,6 @@ type client struct {
 
 // CounterSendTime 记录计数器最后一次发送时间
 type CounterSendTime struct {
-	counter CounterV2
 	// lastSentMicro 最后一次消息发送时间
 	lastSentMicro int64
 }
