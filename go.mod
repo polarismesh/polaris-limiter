@@ -3,7 +3,7 @@ module github.com/polarismesh/polaris-limiter
 go 1.23.0
 
 require (
-	github.com/emicklei/go-restful v2.12.0+incompatible
+	github.com/emicklei/go-restful v2.16.0+incompatible
 	github.com/golang/protobuf v1.5.3
 	github.com/google/uuid v1.3.0
 	github.com/modern-go/reflect2 v1.0.2
