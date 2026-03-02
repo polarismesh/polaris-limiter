@@ -20,66 +20,95 @@ package utils
 import (
 	"fmt"
 	"testing"
-	"time"
 )
 
+// TestSlidingWindow_SlideFive 使用手动传入时间值，避免 time.Sleep 精度问题导致的 flaky test
 func TestSlidingWindow_SlideFive(t *testing.T) {
 	var total uint32 = 100
 	slidingWindow := NewSlidingWindow(5, 1000)
 
+	// 使用固定基准时间，手动控制时间推进
+	baseTime := int64(1000000)
+
 	var allocated uint32
 	var value uint32
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 10)
+
+	// +0ms
+	now := baseTime
+	value = slidingWindow.AddAndGetCurrent(now, now, 10)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
-	time.Sleep(200 * time.Millisecond)
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 40)
+
+	// +200ms
+	now = baseTime + 200
+	value = slidingWindow.AddAndGetCurrent(now, now, 40)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
-	time.Sleep(500 * time.Millisecond)
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 15)
+
+	// +700ms
+	now = baseTime + 700
+	value = slidingWindow.AddAndGetCurrent(now, now, 15)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
-	time.Sleep(500 * time.Millisecond)
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 30)
+
+	// +1200ms：步骤1(+0)和步骤2(+200)的桶已超过1000ms窗口，应过期
+	now = baseTime + 1200
+	value = slidingWindow.AddAndGetCurrent(now, now, 30)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
 	if value != 45 {
 		t.Fatalf("value is %d, invalid", value)
 	}
-	time.Sleep(300 * time.Millisecond)
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 20)
+
+	// +1500ms
+	now = baseTime + 1500
+	value = slidingWindow.AddAndGetCurrent(now, now, 20)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
 	fmt.Printf("allocated is %d\n", allocated)
 }
 
+// TestSlidingWindow_SlideOne 使用手动传入时间值，避免 time.Sleep 精度问题导致的 flaky test
 func TestSlidingWindow_SlideOne(t *testing.T) {
 	var total uint32 = 100
 	slidingWindow := NewSlidingWindow(1, 1000)
 
+	// 使用固定基准时间，手动控制时间推进
+	baseTime := int64(1000000)
+
 	var allocated uint32
 	var value uint32
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 10)
+
+	// +0ms
+	now := baseTime
+	value = slidingWindow.AddAndGetCurrent(now, now, 10)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
-	time.Sleep(200 * time.Millisecond)
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 40)
+
+	// +200ms（与步骤1在同一个1000ms桶内）
+	now = baseTime + 200
+	value = slidingWindow.AddAndGetCurrent(now, now, 40)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
-	time.Sleep(600 * time.Millisecond)
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 15)
+
+	// +1050ms（跨到新的1000ms桶，旧桶的10+40被清除，重新开始计数15）
+	now = baseTime + 1050
+	value = slidingWindow.AddAndGetCurrent(now, now, 15)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
-	time.Sleep(200 * time.Millisecond)
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 30)
+
+	// +1100ms（与步骤3在同一个1000ms桶内，counter=15+30=45）
+	now = baseTime + 1100
+	value = slidingWindow.AddAndGetCurrent(now, now, 30)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
 	if value != 45 {
 		t.Fatalf("value is %d, invalid", value)
 	}
-	time.Sleep(300 * time.Millisecond)
-	value = slidingWindow.AddAndGetCurrent(CurrentMillisecond(), CurrentMillisecond(), 20)
+
+	// +1400ms
+	now = baseTime + 1400
+	value = slidingWindow.AddAndGetCurrent(now, now, 20)
 	allocated += total - value
 	fmt.Printf("left is %d\n", total-value)
 	fmt.Printf("allocated is %d\n", allocated)
