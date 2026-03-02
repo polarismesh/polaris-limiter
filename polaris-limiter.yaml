@@ -13,6 +13,7 @@ api-servers:
     option:
       ip: 0.0.0.0
       port: 8101
+      max-connections: 0 # 最大TCP连接数限制，0或不配置则不限制
 limit:
   myid: 1 #节点ID，集群中不同节点需设置不同的myid
   counter-group: 64 # 计数器分组，不同组的计数器创建时不冲突
