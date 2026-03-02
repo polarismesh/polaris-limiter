@@ -22,6 +22,7 @@ import (
 	"net"
 
 	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
+	"golang.org/x/net/netutil"
 	"google.golang.org/grpc"
 
 	"github.com/polarismesh/polaris-limiter/pkg/log"
@@ -33,6 +34,7 @@ import (
 type Server struct {
 	IP                 string
 	Port               uint32
+	MaxConnections     int
 	server             *grpc.Server
 	rateLimitServiceV2 *RateLimitServiceV2
 }
@@ -41,6 +43,9 @@ type Server struct {
 func (g *Server) Initialize(option map[string]interface{}) error {
 	g.IP = option["ip"].(string)
 	g.Port = uint32(option["port"].(int))
+	if v, ok := option["max-connections"]; ok {
+		g.MaxConnections = v.(int)
+	}
 	return nil
 }
 
@@ -64,6 +69,13 @@ func (g *Server) Run(errCh chan error) {
 		errCh <- err
 		return
 	}
+
+	// 限制最大TCP连接数
+	if g.MaxConnections > 0 {
+		listener = netutil.LimitListener(listener, g.MaxConnections)
+		log.Infof("[GRPC] max connections limit: %d", g.MaxConnections)
+	}
+
 	g.rateLimitServiceV2 = &RateLimitServiceV2{}
 	// 创建grpc server
 	server := grpc.NewServer(
