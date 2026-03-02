@@ -101,7 +101,7 @@ func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, c
 			bootExit(fmt.Sprintf("fail to init polaris sdk, err: %s", err.Error()))
 		}
 		// 服务注册
-		if err := selfRegister(registryCfg, servers, utils.ServerAddress); err != nil {
+		if err := selfRegister(registryCfg, servers, config.APIServers, utils.ServerAddress); err != nil {
 			bootExit(fmt.Sprintf("service registry err: %s", err.Error()))
 		}
 		if registryCfg.HealthCheckEnable { // 启动心跳上报
