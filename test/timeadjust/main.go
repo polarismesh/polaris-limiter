@@ -25,10 +25,10 @@ import (
 	"math"
 	"time"
 
+	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	apiv2 "github.com/polarismesh/polaris-limiter/pkg/api/v2"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
@@ -59,11 +59,11 @@ func main() {
 	defer func() {
 		conn.Close()
 	}()
-	client := apiv2.NewRateLimitGRPCV2Client(conn)
+	client := ratelimiter.NewRateLimitGRPCV2Client(conn)
 	var allTotal float64
 	for i := 0; i < times; i++ {
 		startTime := utils.CurrentMillisecond()
-		servTime, err := client.TimeAdjust(context.Background(), &apiv2.TimeAdjustRequest{})
+		servTime, err := client.TimeAdjust(context.Background(), &ratelimiter.TimeAdjustRequest{})
 		if nil != err {
 			log.Fatal(err)
 		}

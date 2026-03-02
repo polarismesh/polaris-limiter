@@ -8,6 +8,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/natefinch/lumberjack v2.0.0+incompatible
+	github.com/polarismesh/specification v1.7.0
 	github.com/smartystreets/goconvey v1.6.4
 	github.com/spf13/cobra v0.0.6
 	go.uber.org/zap v1.19.1
