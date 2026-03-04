@@ -118,12 +118,17 @@ func doWithPolarisClient(handle func(polaris.PolarisGRPCClient) error) error {
 }
 
 // 创建服务注册请求
-func buildRegisterRequest(cfg *Registry, server apiserver.APIServer, serverAddress string) *polaris.Instance {
+func buildRegisterRequest(cfg *Registry, server apiserver.APIServer, serverCfg apiserver.Config, serverAddress string) *polaris.Instance {
 	instance := &polaris.Instance{}
 	instance.Namespace = &wrappers.StringValue{Value: cfg.Namespace}
 	instance.Service = &wrappers.StringValue{Value: cfg.Name}
 	instance.Host = &wrappers.StringValue{Value: serverAddress}
-	instance.Port = &wrappers.UInt32Value{Value: server.GetPort()}
+	// 如果配置了自定义注册端口则使用自定义端口，否则使用 APIServer 实际监听端口
+	if serverCfg.RegisterPort > 0 {
+		instance.Port = &wrappers.UInt32Value{Value: serverCfg.RegisterPort}
+	} else {
+		instance.Port = &wrappers.UInt32Value{Value: server.GetPort()}
+	}
 	instance.ServiceToken = &wrappers.StringValue{Value: polarisToken}
 	instance.Protocol = &wrappers.StringValue{Value: server.GetProtocol()}
 	instance.Version = &wrappers.StringValue{Value: version.Version}
@@ -153,11 +158,17 @@ func CreateHeaderContextWithReqId(timeout time.Duration, reqID string) (context.
 }
 
 // 注册限流Server
-func selfRegister(cfg *Registry, servers []apiserver.APIServer, serverAddress string) error {
+func selfRegister(cfg *Registry, servers []apiserver.APIServer, apiServerConfigs []apiserver.Config, serverAddress string) error {
+	// 构建 server name -> apiserver.Config 的映射
+	serverCfgMap := make(map[string]apiserver.Config, len(apiServerConfigs))
+	for _, sc := range apiServerConfigs {
+		serverCfgMap[sc.Name] = sc
+	}
 	// 开始对每个监听端口的服务进行注册
 	var instances = make([]*polaris.Instance, 0, len(servers))
 	for _, server := range servers {
-		instance := buildRegisterRequest(cfg, server, serverAddress)
+		serverCfg := serverCfgMap[server.GetProtocol()]
+		instance := buildRegisterRequest(cfg, server, serverCfg, serverAddress)
 		instances = append(instances, instance)
 	}
 	var heartbeatInstances = make([]*polaris.Instance, 0, len(servers))

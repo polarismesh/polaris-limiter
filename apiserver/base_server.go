@@ -21,8 +21,9 @@ import "errors"
 
 // Config API服务器配置 配置文件
 type Config struct {
-	Name   string
-	Option map[string]interface{}
+	Name         string                 `yaml:"name"`
+	Option       map[string]interface{} `yaml:"option"`
+	RegisterPort uint32                 `yaml:"register-port"` // 自定义注册端口，不填或为0则使用 server 实际监听端口
 }
 
 // APIServer API服务器接口

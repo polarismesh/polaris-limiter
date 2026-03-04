@@ -4,12 +4,15 @@ registry:
   name: polaris.limiter
   namespace: Polaris
   health-check-enable: true
+  # host: 127.0.0.1       # 自定义注册 IP（不填则自动探测本地 IP）
 api-servers:
   - name: http
+    # register-port: 8100     # 自定义注册端口（不填或为0则使用 option.port）
     option:
       ip: 0.0.0.0
       port: 8100
   - name: grpc
+    # register-port: 8101     # 自定义注册端口（不填或为0则使用 option.port）
     option:
       ip: 0.0.0.0
       port: 8101
