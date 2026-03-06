@@ -168,6 +168,11 @@ func selfRegister(cfg *Registry, servers []apiserver.APIServer, apiServerConfigs
 	var instances = make([]*polaris.Instance, 0, len(servers))
 	for _, server := range servers {
 		serverCfg := serverCfgMap[server.GetProtocol()]
+		// 检查是否需要注册，不需要注册的 server 跳过
+		if !serverCfg.ShouldRegister() {
+			log.Infof("[Bootstrap] api server(%s) register is disabled, skip registration", server.GetProtocol())
+			continue
+		}
 		instance := buildRegisterRequest(cfg, server, serverCfg, serverAddress)
 		instances = append(instances, instance)
 	}

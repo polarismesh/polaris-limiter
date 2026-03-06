@@ -7,11 +7,13 @@ registry:
   # host: 127.0.0.1       # 自定义注册 IP（不填则自动探测本地 IP）
 api-servers:
   - name: http
+    # register-enabled: true    # 是否注册到注册中心（不填默认为 true，设为 false 则不注册）
     # register-port: 8100     # 自定义注册端口（不填或为0则使用 option.port）
     option:
       ip: 0.0.0.0
       port: 8100
   - name: grpc
+    # register-enabled: true    # 是否注册到注册中心（不填默认为 true，设为 false 则不注册）
     # register-port: 8101     # 自定义注册端口（不填或为0则使用 option.port）
     option:
       ip: 0.0.0.0
