@@ -491,3 +491,226 @@ func TestEndToEnd_CustomIPAndPort(t *testing.T) {
 		})
 	})
 }
+
+// boolPtr 辅助函数，返回 bool 指针
+func boolPtr(b bool) *bool {
+	return &b
+}
+
+// TestConfigShouldRegister 测试 Config.ShouldRegister 方法
+func TestConfigShouldRegister(t *testing.T) {
+	Convey("测试 Config.ShouldRegister 方法", t, func() {
+		Convey("RegisterEnabled 为 nil（未配置）时应返回 true", func() {
+			cfg := apiserver.Config{Name: "http"}
+			So(cfg.ShouldRegister(), ShouldBeTrue)
+		})
+
+		Convey("RegisterEnabled 为 true 时应返回 true", func() {
+			cfg := apiserver.Config{Name: "http", RegisterEnabled: boolPtr(true)}
+			So(cfg.ShouldRegister(), ShouldBeTrue)
+		})
+
+		Convey("RegisterEnabled 为 false 时应返回 false", func() {
+			cfg := apiserver.Config{Name: "http", RegisterEnabled: boolPtr(false)}
+			So(cfg.ShouldRegister(), ShouldBeFalse)
+		})
+	})
+}
+
+// TestConfigYAML_RegisterSwitch 测试 YAML 配置文件能正确解析 register 开关
+func TestConfigYAML_RegisterSwitch(t *testing.T) {
+	Convey("测试 YAML 配置解析 register 开关", t, func() {
+		Convey("不配置 register 字段时应默认注册（ShouldRegister 返回 true）", func() {
+			yamlContent := `
+api-servers:
+  - name: http
+    option:
+      ip: 0.0.0.0
+      port: 8100
+  - name: grpc
+    option:
+      ip: 0.0.0.0
+      port: 8101
+`
+			var config Config
+			err := yaml.Unmarshal([]byte(yamlContent), &config)
+			So(err, ShouldBeNil)
+			So(len(config.APIServers), ShouldEqual, 2)
+			So(config.APIServers[0].RegisterEnabled, ShouldBeNil)
+			So(config.APIServers[0].ShouldRegister(), ShouldBeTrue)
+			So(config.APIServers[1].RegisterEnabled, ShouldBeNil)
+			So(config.APIServers[1].ShouldRegister(), ShouldBeTrue)
+		})
+
+		Convey("配置 register-enabled: true 时应注册", func() {
+			yamlContent := `
+api-servers:
+  - name: http
+    register-enabled: true
+    option:
+      ip: 0.0.0.0
+      port: 8100
+`
+			var config Config
+			err := yaml.Unmarshal([]byte(yamlContent), &config)
+			So(err, ShouldBeNil)
+			So(config.APIServers[0].RegisterEnabled, ShouldNotBeNil)
+			So(*config.APIServers[0].RegisterEnabled, ShouldBeTrue)
+			So(config.APIServers[0].ShouldRegister(), ShouldBeTrue)
+		})
+
+		Convey("配置 register-enabled: false 时应不注册", func() {
+			yamlContent := `
+api-servers:
+  - name: http
+    register-enabled: false
+    option:
+      ip: 0.0.0.0
+      port: 8100
+`
+			var config Config
+			err := yaml.Unmarshal([]byte(yamlContent), &config)
+			So(err, ShouldBeNil)
+			So(config.APIServers[0].RegisterEnabled, ShouldNotBeNil)
+			So(*config.APIServers[0].RegisterEnabled, ShouldBeFalse)
+			So(config.APIServers[0].ShouldRegister(), ShouldBeFalse)
+		})
+
+		Convey("混合配置：部分 server 注册，部分不注册", func() {
+			yamlContent := `
+api-servers:
+  - name: http
+    register-enabled: false
+    option:
+      ip: 0.0.0.0
+      port: 8100
+  - name: grpc
+    register-enabled: true
+    option:
+      ip: 0.0.0.0
+      port: 8101
+`
+			var config Config
+			err := yaml.Unmarshal([]byte(yamlContent), &config)
+			So(err, ShouldBeNil)
+			So(len(config.APIServers), ShouldEqual, 2)
+			So(config.APIServers[0].ShouldRegister(), ShouldBeFalse)
+			So(config.APIServers[1].ShouldRegister(), ShouldBeTrue)
+		})
+
+		Convey("register 与 register-port 组合使用", func() {
+			yamlContent := `
+api-servers:
+  - name: http
+    register-enabled: false
+    register-port: 19000
+    option:
+      ip: 0.0.0.0
+      port: 8100
+  - name: grpc
+    register-enabled: true
+    register-port: 19001
+    option:
+      ip: 0.0.0.0
+      port: 8101
+`
+			var config Config
+			err := yaml.Unmarshal([]byte(yamlContent), &config)
+			So(err, ShouldBeNil)
+			So(config.APIServers[0].ShouldRegister(), ShouldBeFalse)
+			So(config.APIServers[0].RegisterPort, ShouldEqual, uint32(19000))
+			So(config.APIServers[1].ShouldRegister(), ShouldBeTrue)
+			So(config.APIServers[1].RegisterPort, ShouldEqual, uint32(19001))
+		})
+	})
+}
+
+// TestEndToEnd_RegisterSwitch 端到端测试：模拟注册流程中 register 开关的过滤
+func TestEndToEnd_RegisterSwitch(t *testing.T) {
+	Convey("端到端测试：模拟注册流程中 register 开关的过滤", t, func() {
+		Convey("所有 server 都注册（默认行为）", func() {
+			apiServerConfigs := []apiserver.Config{
+				{Name: "http"},
+				{Name: "grpc"},
+			}
+
+			// 模拟 selfRegister 中的过滤逻辑
+			var registeredServers []string
+			for _, sc := range apiServerConfigs {
+				if sc.ShouldRegister() {
+					registeredServers = append(registeredServers, sc.Name)
+				}
+			}
+			So(len(registeredServers), ShouldEqual, 2)
+			So(registeredServers, ShouldContain, "http")
+			So(registeredServers, ShouldContain, "grpc")
+		})
+
+		Convey("部分 server 关闭注册", func() {
+			apiServerConfigs := []apiserver.Config{
+				{Name: "http", RegisterEnabled: boolPtr(false)},
+				{Name: "grpc"},
+			}
+
+			var registeredServers []string
+			for _, sc := range apiServerConfigs {
+				if sc.ShouldRegister() {
+					registeredServers = append(registeredServers, sc.Name)
+				}
+			}
+			So(len(registeredServers), ShouldEqual, 1)
+			So(registeredServers, ShouldContain, "grpc")
+			So(registeredServers, ShouldNotContain, "http")
+		})
+
+		Convey("所有 server 都关闭注册", func() {
+			apiServerConfigs := []apiserver.Config{
+				{Name: "http", RegisterEnabled: boolPtr(false)},
+				{Name: "grpc", RegisterEnabled: boolPtr(false)},
+			}
+
+			var registeredServers []string
+			for _, sc := range apiServerConfigs {
+				if sc.ShouldRegister() {
+					registeredServers = append(registeredServers, sc.Name)
+				}
+			}
+			So(len(registeredServers), ShouldEqual, 0)
+		})
+
+		Convey("关闭注册的 server 不应生成注册请求", func() {
+			cfg := &Registry{
+				Name:      "polaris.limiter",
+				Namespace: "Polaris",
+			}
+
+			httpServer := &mockAPIServer{protocol: "http", port: 8100}
+			grpcServer := &mockAPIServer{protocol: "grpc", port: 8101}
+
+			apiServerConfigs := []apiserver.Config{
+				{Name: "http", RegisterEnabled: boolPtr(false)},
+				{Name: "grpc", RegisterEnabled: boolPtr(true), RegisterPort: 19001},
+			}
+
+			// 模拟 selfRegister 中的完整逻辑
+			serverCfgMap := make(map[string]apiserver.Config, len(apiServerConfigs))
+			for _, sc := range apiServerConfigs {
+				serverCfgMap[sc.Name] = sc
+			}
+
+			servers := []apiserver.APIServer{httpServer, grpcServer}
+			var instances []string
+			for _, server := range servers {
+				serverCfg := serverCfgMap[server.GetProtocol()]
+				if !serverCfg.ShouldRegister() {
+					continue
+				}
+				instance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+				instances = append(instances, instance.GetProtocol().GetValue())
+			}
+
+			So(len(instances), ShouldEqual, 1)
+			So(instances[0], ShouldEqual, "grpc")
+		})
+	})
+}

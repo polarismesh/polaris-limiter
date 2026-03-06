@@ -21,9 +21,16 @@ import "errors"
 
 // Config API服务器配置 配置文件
 type Config struct {
-	Name         string                 `yaml:"name"`
-	Option       map[string]interface{} `yaml:"option"`
-	RegisterPort uint32                 `yaml:"register-port"` // 自定义注册端口，不填或为0则使用 server 实际监听端口
+	Name            string                 `yaml:"name"`
+	Option          map[string]interface{} `yaml:"option"`
+	RegisterEnabled *bool                  `yaml:"register-enabled"` // 是否注册到注册中心，不填或为 true 则注册，设为 false 则不注册。注意：请使用 ShouldRegister() 方法判断，不要直接读取此字段
+	RegisterPort    uint32                 `yaml:"register-port"`    // 自定义注册端口，不填或为0则使用 server 实际监听端口
+}
+
+// ShouldRegister 返回该 API Server 是否需要注册到注册中心
+// 当 Register 字段未配置（nil）或为 true 时返回 true
+func (c Config) ShouldRegister() bool {
+	return c.RegisterEnabled == nil || *c.RegisterEnabled
 }
 
 // APIServer API服务器接口
