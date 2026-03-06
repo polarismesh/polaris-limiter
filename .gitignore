@@ -13,3 +13,7 @@ polaris-limiter-release*.*
 log/
 
 vendor/
+
+.codebuddy/
+.claude/
+CLAUDE.md
