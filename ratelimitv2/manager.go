@@ -215,6 +215,32 @@ func (cm *CounterManagerV2) AddCounter(initReq *ratelimiter.RateLimitInitRequest
 	return code, counter
 }
 
+// CounterCount 返回当前活跃的 counter 数量
+func (cm *CounterManagerV2) CounterCount() int {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
+	return len(cm.allocatedKeys)
+}
+
+// CounterIdentifierWithKey 带 counter key 的标识信息
+type CounterIdentifierWithKey struct {
+	Key        uint32
+	Identifier CounterIdentifier
+}
+
+// ListCounterIdentifiers 返回所有活跃 counter 的标识信息，支持分页（offset 从 0 开始，limit 为 0 表示不限制）
+func (cm *CounterManagerV2) ListCounterIdentifiers(offset, limit int) []CounterIdentifierWithKey {
+	var all []CounterIdentifierWithKey
+	cm.counterMap.Range(func(key, value interface{}) bool {
+		all = append(all, CounterIdentifierWithKey{
+			Key:        value.(uint32),
+			Identifier: key.(CounterIdentifier),
+		})
+		return true
+	})
+	return paginate(all, offset, limit)
+}
+
 // GetCounter 获取计数器
 func (cm *CounterManagerV2) GetCounter(counterKey uint32) (apiv2.Code, CounterV2) {
 	if counterKey > cm.maxSize {
@@ -285,6 +311,38 @@ func (c *ClientManager) AddClient(
 	return apiv2.ExecuteSuccess, client
 }
 
+// ClientCount 返回当前已注册的客户端数量
+func (c *ClientManager) ClientCount() int {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	return len(c.clientMap)
+}
+
+// ListClients 返回所有活跃客户端，支持分页（offset 从 0 开始，limit 为 0 表示不限制）
+func (c *ClientManager) ListClients(offset, limit int) []Client {
+	c.mutex.Lock()
+	all := make([]Client, 0, len(c.clientMap))
+	for _, key := range c.clientMap {
+		all = append(all, c.clients[toArrayIndex(key)])
+	}
+	c.mutex.Unlock()
+	return paginate(all, offset, limit)
+}
+
+// GetClient 根据 clientKey 获取客户端
+func (c *ClientManager) GetClient(clientKey uint32) (apiv2.Code, Client) {
+	if clientKey == 0 || clientKey > c.maxSize {
+		return apiv2.NotFoundLimiter, nil
+	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	client := c.clients[toArrayIndex(clientKey)]
+	if reflect2.IsNil(client) {
+		return apiv2.NotFoundLimiter, nil
+	}
+	return apiv2.ExecuteSuccess, client
+}
+
 // DelClient 删除客户端
 func (c *ClientManager) DelClient(client Client, streamCtxId string) bool {
 	c.mutex.Lock()
@@ -299,4 +357,17 @@ func (c *ClientManager) DelClient(client Client, streamCtxId string) bool {
 		return true
 	}
 	return false
+}
+
+// paginate 对切片做分页裁剪，offset 从 0 开始，limit 为 0 表示不限制
+func paginate[T any](all []T, offset, limit int) []T {
+	total := len(all)
+	if offset >= total {
+		return []T{}
+	}
+	all = all[offset:]
+	if limit > 0 && limit < len(all) {
+		all = all[:limit]
+	}
+	return all
 }
