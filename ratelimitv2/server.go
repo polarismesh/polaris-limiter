@@ -50,6 +50,11 @@ func (s *Server) CounterMng() *CounterManagerV2 {
 	return s.counterMng
 }
 
+// ClientMng 获取客户端管理类
+func (s *Server) ClientMng() *ClientManager {
+	return s.clientMng
+}
+
 // CleanupClient 清理客户端
 func (s *Server) CleanupClient(client Client, streamCtxId string) {
 	if s.clientMng.DelClient(client, streamCtxId) {
