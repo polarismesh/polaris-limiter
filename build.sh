@@ -27,7 +27,7 @@ pkg_name="${folder_name}.zip"
 if [ "${GOOS}" == "windows" ]; then
   bin_name="polaris-limiter.exe"
 fi
-echo "GOOS is ${GOOS}, binary name is ${bin_name}"
+echo "GOOS is ${GOOS}, GOARCH is ${GOARCH}, binary name is ${bin_name}"
 
 cd $workdir
 
