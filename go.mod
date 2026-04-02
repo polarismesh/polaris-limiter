@@ -1,20 +1,20 @@
 module github.com/polarismesh/polaris-limiter
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/emicklei/go-restful v2.16.0+incompatible
-	github.com/golang/protobuf v1.5.3
-	github.com/google/uuid v1.3.0
+	github.com/golang/protobuf v1.5.4
+	github.com/google/uuid v1.6.0
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/natefinch/lumberjack v2.0.0+incompatible
 	github.com/polarismesh/specification v1.7.0
 	github.com/smartystreets/goconvey v1.6.4
 	github.com/spf13/cobra v0.0.6
 	go.uber.org/zap v1.19.1
-	golang.org/x/net v0.38.0
-	google.golang.org/grpc v1.56.3
-	google.golang.org/protobuf v1.33.0
+	golang.org/x/net v0.48.0
+	google.golang.org/grpc v1.79.3
+	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -30,8 +30,8 @@ require (
 	github.com/spf13/pflag v1.0.3 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
+	golang.org/x/text v0.32.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
