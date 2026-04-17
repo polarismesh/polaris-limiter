@@ -20,6 +20,8 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"math"
+	"math/rand"
 	"net"
 	"sync/atomic"
 	"time"
@@ -42,6 +44,13 @@ const (
 	headerRequestID = "request-id"
 
 	timeout = 1 * time.Second
+
+	// 心跳返回 NOT_FOUND 连续失败阈值，超过后触发重注册
+	maxHeartbeatFailCount = 2
+	// 重注册退避上限
+	maxReRegisterDelay = 60 * time.Second
+	// Polaris NotFoundResource 错误码
+	notFoundResourceCode uint32 = 400202
 )
 
 var rid uint64
@@ -51,6 +60,17 @@ var (
 
 	polarisServerAddress string
 	polarisToken         string
+
+	// 重注册所需的上下文（首次注册时保存）
+	savedRegistryCfg      *Registry
+	savedAPIServers       []apiserver.APIServer
+	savedAPIServerConfigs []apiserver.Config
+	savedServerAddress    string
+
+	// 重注册状态（使用 atomic 操作保证并发安全）
+	notFoundCount   int32 // NOT_FOUND 连续失败次数
+	reRegisterCount int32 // 重注册重试计数（用于指数退避）
+	reRegistering   int32 // 0/1 标志，是否正在执行重注册
 )
 
 // 初始化客户端SDK
@@ -84,11 +104,25 @@ func startHeartbeat(ctx context.Context) {
 							reqId := fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
 							clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
 							defer cancel()
-							_, err := client.Heartbeat(clientCtx, instance)
+							resp, err := client.Heartbeat(clientCtx, instance)
 							if nil != err {
-								log.Errorf("[Bootstrap] fail to send heatBeat, err is %v", err)
+								log.Errorf("[Bootstrap] fail to send heartbeat, err is %v", err)
+								return err
 							}
-							return err
+							// 检查响应码，判断是否为 NOT_FOUND
+							code := resp.GetCode().GetValue()
+							if code == notFoundResourceCode {
+								cnt := atomic.AddInt32(&notFoundCount, 1)
+								log.Errorf("[Bootstrap] heartbeat response not found for instance %s:%d, notFoundCount: %d",
+									instance.GetHost().GetValue(), instance.GetPort().GetValue(), cnt)
+								if cnt > int32(maxHeartbeatFailCount) {
+									triggerAsyncReRegister(ctx)
+								}
+								return fmt.Errorf("instance not found")
+							}
+							// 心跳成功，重置失败计数
+							atomic.StoreInt32(&notFoundCount, 0)
+							return nil
 						}
 						if err := heartbeat(); nil != err {
 							return err
@@ -99,6 +133,67 @@ func startHeartbeat(ctx context.Context) {
 			}
 		}
 	}()
+}
+
+// triggerAsyncReRegister 触发异步重注册，使用 CAS 防止并发
+func triggerAsyncReRegister(ctx context.Context) {
+	if !atomic.CompareAndSwapInt32(&reRegistering, 0, 1) {
+		log.Infof("[Bootstrap] re-register already in progress, skip")
+		return
+	}
+	go asyncReRegister(ctx)
+}
+
+// asyncReRegister 异步执行重注册，带指数退避 + 随机抖动
+func asyncReRegister(ctx context.Context) {
+	defer atomic.StoreInt32(&reRegistering, 0)
+
+	count := atomic.LoadInt32(&reRegisterCount)
+	delay := calcReRegisterDelay(count)
+
+	log.Infof("[Bootstrap] triggering async re-register, reRegisterCount: %d, delay: %v", count, delay)
+
+	// 等待退避时间，同时监听 ctx 取消
+	if delay > 0 {
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			log.Infof("[Bootstrap] re-register cancelled due to context done")
+			return
+		case <-timer.C:
+		}
+	}
+
+	// 执行重注册
+	if savedRegistryCfg == nil {
+		log.Errorf("[Bootstrap] re-register failed: saved registry config is nil")
+		return
+	}
+
+	if err := selfRegister(savedRegistryCfg, savedAPIServers, savedAPIServerConfigs, savedServerAddress); err != nil {
+		atomic.AddInt32(&reRegisterCount, 1)
+		log.Errorf("[Bootstrap] re-register failed, err: %s", err.Error())
+		return
+	}
+
+	// 重注册成功，重置所有计数器
+	log.Infof("[Bootstrap] re-register success")
+	atomic.StoreInt32(&notFoundCount, 0)
+	atomic.StoreInt32(&reRegisterCount, 0)
+}
+
+// calcReRegisterDelay 计算重注册退避延迟
+// delay = min(serverTtl * 2^(count-1) + random(serverTtl), maxReRegisterDelay)
+// 首次触发（count=0）delay=0，立即重注册
+func calcReRegisterDelay(count int32) time.Duration {
+	if count <= 0 {
+		return 0
+	}
+	base := float64(serverTtl) * math.Pow(2, float64(count-1))
+	jitter := float64(rand.Int63n(int64(serverTtl)))
+	delay := time.Duration(base + jitter)
+	return min(delay, maxReRegisterDelay)
 }
 
 func doWithPolarisClient(handle func(polaris.PolarisGRPCClient) error) error {
@@ -159,6 +254,12 @@ func CreateHeaderContextWithReqId(timeout time.Duration, reqID string) (context.
 
 // 注册限流Server
 func selfRegister(cfg *Registry, servers []apiserver.APIServer, apiServerConfigs []apiserver.Config, serverAddress string) error {
+	// 保存注册上下文，供重注册使用
+	savedRegistryCfg = cfg
+	savedAPIServers = servers
+	savedAPIServerConfigs = apiServerConfigs
+	savedServerAddress = serverAddress
+
 	// 构建 server name -> apiserver.Config 的映射
 	serverCfgMap := make(map[string]apiserver.Config, len(apiServerConfigs))
 	for _, sc := range apiServerConfigs {
@@ -186,7 +287,7 @@ func selfRegister(cfg *Registry, servers []apiserver.APIServer, apiServerConfigs
 				defer cancel()
 				resp, err := client.RegisterInstance(clientCtx, instance)
 				if nil != err {
-					log.Infof("[Bootstrap] fail to register instance %s:%d, err: %s", instance.GetHost().GetValue(), instance.GetPort().GetValue(), err)
+					log.Errorf("[Bootstrap] fail to register instance %s:%d, err: %s", instance.GetHost().GetValue(), instance.GetPort().GetValue(), err)
 					return err
 				}
 				log.Infof("[Bootstrap] instance %s:%d registered, code %d", instance.GetHost().GetValue(), instance.GetPort().GetValue(), resp.GetCode().GetValue())
@@ -201,9 +302,8 @@ func selfRegister(cfg *Registry, servers []apiserver.APIServer, apiServerConfigs
 				heartbeatInstances = append(heartbeatInstances, hbInstance)
 				return nil
 			}
-			err := register()
-			if nil != err {
-				return nil
+			if err := register(); nil != err {
+				return err
 			}
 		}
 		return nil

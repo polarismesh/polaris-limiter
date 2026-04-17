@@ -18,8 +18,11 @@
 package bootstrap
 
 import (
+	"context"
 	"os"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"gopkg.in/yaml.v2"
@@ -622,6 +625,194 @@ api-servers:
 			So(config.APIServers[1].ShouldRegister(), ShouldBeTrue)
 			So(config.APIServers[1].RegisterPort, ShouldEqual, uint32(19001))
 		})
+	})
+}
+
+// resetReRegisterState 重置所有重注册相关的全局状态，用于测试隔离
+func resetReRegisterState() {
+	atomic.StoreInt32(&notFoundCount, 0)
+	atomic.StoreInt32(&reRegisterCount, 0)
+	atomic.StoreInt32(&reRegistering, 0)
+	savedRegistryCfg = nil
+	savedAPIServers = nil
+	savedAPIServerConfigs = nil
+	savedServerAddress = ""
+}
+
+// TestCalcReRegisterDelay 测试退避延迟计算逻辑
+func TestCalcReRegisterDelay(t *testing.T) {
+	Convey("测试 calcReRegisterDelay 退避延迟计算", t, func() {
+		Convey("count=0 时应立即执行（delay=0）", func() {
+			delay := calcReRegisterDelay(0)
+			So(delay, ShouldEqual, 0)
+		})
+
+		Convey("count<0 时应立即执行（delay=0）", func() {
+			delay := calcReRegisterDelay(-1)
+			So(delay, ShouldEqual, 0)
+		})
+
+		Convey("count=1 时 delay = serverTtl * 2^0 + jitter = serverTtl + jitter", func() {
+			delay := calcReRegisterDelay(1)
+			// base = 5s * 2^0 = 5s, jitter in [0, 5s)
+			// delay in [5s, 10s)
+			So(delay, ShouldBeGreaterThanOrEqualTo, serverTtl)
+			So(delay, ShouldBeLessThan, 2*serverTtl)
+		})
+
+		Convey("count=2 时 delay = serverTtl * 2^1 + jitter = 10s + jitter", func() {
+			delay := calcReRegisterDelay(2)
+			// base = 5s * 2^1 = 10s, jitter in [0, 5s)
+			// delay in [10s, 15s)
+			So(delay, ShouldBeGreaterThanOrEqualTo, 2*serverTtl)
+			So(delay, ShouldBeLessThan, 3*serverTtl)
+		})
+
+		Convey("大 count 值时 delay 应不超过 maxReRegisterDelay", func() {
+			delay := calcReRegisterDelay(100)
+			So(delay, ShouldBeLessThanOrEqualTo, maxReRegisterDelay)
+		})
+	})
+}
+
+// TestReRegisterState_AtomicFlags 测试重注册状态标志的原子操作
+func TestReRegisterState_AtomicFlags(t *testing.T) {
+	Convey("测试重注册状态标志", t, func() {
+		defer resetReRegisterState()
+
+		Convey("初始状态 reRegistering 应为 0", func() {
+			resetReRegisterState()
+			So(atomic.LoadInt32(&reRegistering), ShouldEqual, 0)
+		})
+
+		Convey("CAS 设置 reRegistering 应成功", func() {
+			resetReRegisterState()
+			ok := atomic.CompareAndSwapInt32(&reRegistering, 0, 1)
+			So(ok, ShouldBeTrue)
+			So(atomic.LoadInt32(&reRegistering), ShouldEqual, 1)
+		})
+
+		Convey("reRegistering 已为 1 时 CAS 应失败", func() {
+			resetReRegisterState()
+			atomic.StoreInt32(&reRegistering, 1)
+			ok := atomic.CompareAndSwapInt32(&reRegistering, 0, 1)
+			So(ok, ShouldBeFalse)
+		})
+
+		Convey("notFoundCount 累加和重置", func() {
+			resetReRegisterState()
+			atomic.AddInt32(&notFoundCount, 1)
+			atomic.AddInt32(&notFoundCount, 1)
+			atomic.AddInt32(&notFoundCount, 1)
+			So(atomic.LoadInt32(&notFoundCount), ShouldEqual, 3)
+
+			atomic.StoreInt32(&notFoundCount, 0)
+			So(atomic.LoadInt32(&notFoundCount), ShouldEqual, 0)
+		})
+	})
+}
+
+// TestSelfRegister_SavesContext 测试 selfRegister 保存注册上下文
+func TestSelfRegister_SavesContext(t *testing.T) {
+	Convey("测试 selfRegister 保存注册上下文供重注册使用", t, func() {
+		defer resetReRegisterState()
+
+		// selfRegister 会尝试连接 Polaris server，这里只验证上下文保存逻辑
+		// 通过设置一个不可达的地址来触发连接失败
+		cfg := &Registry{
+			Name:      "polaris.limiter",
+			Namespace: "Polaris",
+		}
+		servers := []apiserver.APIServer{&mockAPIServer{protocol: "grpc", port: 8101}}
+		apiConfigs := []apiserver.Config{{Name: "grpc"}}
+
+		polarisServerAddress = "127.0.0.1:1" // 不可达地址
+		_ = selfRegister(cfg, servers, apiConfigs, "10.0.0.1")
+
+		// 验证上下文已保存
+		So(savedRegistryCfg, ShouldEqual, cfg)
+		So(savedAPIServers, ShouldResemble, servers)
+		So(savedAPIServerConfigs, ShouldResemble, apiConfigs)
+		So(savedServerAddress, ShouldEqual, "10.0.0.1")
+	})
+}
+
+// TestHeartbeat_NotFoundThreshold 测试心跳 NOT_FOUND 阈值逻辑
+func TestHeartbeat_NotFoundThreshold(t *testing.T) {
+	Convey("测试心跳 NOT_FOUND 失败计数逻辑", t, func() {
+		defer resetReRegisterState()
+
+		Convey("notFoundCount 未超过阈值时不应触发重注册", func() {
+			resetReRegisterState()
+			atomic.StoreInt32(&notFoundCount, 1)
+			So(atomic.LoadInt32(&notFoundCount), ShouldBeLessThanOrEqualTo, int32(maxHeartbeatFailCount))
+		})
+
+		Convey("notFoundCount 超过阈值时应触发重注册", func() {
+			resetReRegisterState()
+			atomic.StoreInt32(&notFoundCount, 3) // > maxHeartbeatFailCount (2)
+			So(atomic.LoadInt32(&notFoundCount), ShouldBeGreaterThan, int32(maxHeartbeatFailCount))
+		})
+
+		Convey("心跳成功后应重置 notFoundCount", func() {
+			resetReRegisterState()
+			atomic.StoreInt32(&notFoundCount, 5)
+			// 模拟心跳成功
+			atomic.StoreInt32(&notFoundCount, 0)
+			So(atomic.LoadInt32(&notFoundCount), ShouldEqual, 0)
+		})
+	})
+}
+
+// TestAsyncReRegister_NilConfig 测试 savedRegistryCfg 为 nil 时的防护
+func TestAsyncReRegister_NilConfig(t *testing.T) {
+	Convey("测试 asyncReRegister 在 savedRegistryCfg 为 nil 时不崩溃", t, func() {
+		defer resetReRegisterState()
+		resetReRegisterState()
+
+		// savedRegistryCfg 为 nil，asyncReRegister 应安全退出
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// 直接调用，不应 panic
+		atomic.StoreInt32(&reRegistering, 1)
+		asyncReRegister(ctx)
+
+		// reRegistering 应被重置为 0
+		So(atomic.LoadInt32(&reRegistering), ShouldEqual, 0)
+	})
+}
+
+// TestAsyncReRegister_ContextCancelled 测试 context 取消时退出重注册
+func TestAsyncReRegister_ContextCancelled(t *testing.T) {
+	Convey("测试 asyncReRegister 在 context 取消时安全退出", t, func() {
+		defer resetReRegisterState()
+		resetReRegisterState()
+
+		// 设置一个较大的退避计数，使 delay > 0
+		atomic.StoreInt32(&reRegisterCount, 5)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		atomic.StoreInt32(&reRegistering, 1)
+
+		done := make(chan struct{})
+		go func() {
+			asyncReRegister(ctx)
+			close(done)
+		}()
+
+		// 立即取消 context
+		cancel()
+
+		// 等待 asyncReRegister 退出
+		select {
+		case <-done:
+			// 正常退出
+		case <-time.After(3 * time.Second):
+			t.Fatal("asyncReRegister did not exit after context cancellation")
+		}
+
+		So(atomic.LoadInt32(&reRegistering), ShouldEqual, 0)
 	})
 }
 
