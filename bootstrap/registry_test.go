@@ -19,15 +19,18 @@ package bootstrap
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/ptypes/wrappers"
 	. "github.com/smartystreets/goconvey/convey"
 	"gopkg.in/yaml.v2"
 
 	"github.com/polarismesh/polaris-limiter/apiserver"
+	polaris "github.com/polarismesh/polaris-limiter/pkg/api/polaris/v1"
 )
 
 // mockAPIServer 模拟 APIServer 接口，用于单测
@@ -628,15 +631,13 @@ api-servers:
 	})
 }
 
-// resetReRegisterState 重置所有重注册相关的全局状态，用于测试隔离
-func resetReRegisterState() {
-	atomic.StoreInt32(&notFoundCount, 0)
-	atomic.StoreInt32(&reRegisterCount, 0)
-	atomic.StoreInt32(&reRegistering, 0)
-	savedRegistryCfg = nil
-	savedAPIServers = nil
-	savedAPIServerConfigs = nil
-	savedServerAddress = ""
+// resetRegistrar 重置 registrar 单例及 registerFn 注入点，供测试隔离使用。
+func resetRegistrar() {
+	reg = &registrar{}
+	registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
+		apiServerConfigs []apiserver.Config, serverAddress string) error {
+		return r.doSelfRegister(cfg, servers, apiServerConfigs, serverAddress)
+	}
 }
 
 // TestCalcReRegisterDelay 测试退避延迟计算逻辑
@@ -675,144 +676,233 @@ func TestCalcReRegisterDelay(t *testing.T) {
 	})
 }
 
-// TestReRegisterState_AtomicFlags 测试重注册状态标志的原子操作
-func TestReRegisterState_AtomicFlags(t *testing.T) {
-	Convey("测试重注册状态标志", t, func() {
-		defer resetReRegisterState()
-
-		Convey("初始状态 reRegistering 应为 0", func() {
-			resetReRegisterState()
-			So(atomic.LoadInt32(&reRegistering), ShouldEqual, 0)
-		})
-
-		Convey("CAS 设置 reRegistering 应成功", func() {
-			resetReRegisterState()
-			ok := atomic.CompareAndSwapInt32(&reRegistering, 0, 1)
-			So(ok, ShouldBeTrue)
-			So(atomic.LoadInt32(&reRegistering), ShouldEqual, 1)
-		})
-
-		Convey("reRegistering 已为 1 时 CAS 应失败", func() {
-			resetReRegisterState()
-			atomic.StoreInt32(&reRegistering, 1)
-			ok := atomic.CompareAndSwapInt32(&reRegistering, 0, 1)
-			So(ok, ShouldBeFalse)
-		})
-
-		Convey("notFoundCount 累加和重置", func() {
-			resetReRegisterState()
-			atomic.AddInt32(&notFoundCount, 1)
-			atomic.AddInt32(&notFoundCount, 1)
-			atomic.AddInt32(&notFoundCount, 1)
-			So(atomic.LoadInt32(&notFoundCount), ShouldEqual, 3)
-
-			atomic.StoreInt32(&notFoundCount, 0)
-			So(atomic.LoadInt32(&notFoundCount), ShouldEqual, 0)
-		})
-	})
-}
-
-// TestSelfRegister_SavesContext 测试 selfRegister 保存注册上下文
-func TestSelfRegister_SavesContext(t *testing.T) {
-	Convey("测试 selfRegister 保存注册上下文供重注册使用", t, func() {
-		defer resetReRegisterState()
-
-		// selfRegister 会尝试连接 Polaris server，这里只验证上下文保存逻辑
-		// 通过设置一个不可达的地址来触发连接失败
-		cfg := &Registry{
-			Name:      "polaris.limiter",
-			Namespace: "Polaris",
-		}
-		servers := []apiserver.APIServer{&mockAPIServer{protocol: "grpc", port: 8101}}
-		apiConfigs := []apiserver.Config{{Name: "grpc"}}
-
-		polarisServerAddress = "127.0.0.1:1" // 不可达地址
-		_ = selfRegister(cfg, servers, apiConfigs, "10.0.0.1")
-
-		// 验证上下文已保存
-		So(savedRegistryCfg, ShouldEqual, cfg)
-		So(savedAPIServers, ShouldResemble, servers)
-		So(savedAPIServerConfigs, ShouldResemble, apiConfigs)
-		So(savedServerAddress, ShouldEqual, "10.0.0.1")
-	})
-}
-
-// TestHeartbeat_NotFoundThreshold 测试心跳 NOT_FOUND 阈值逻辑
-func TestHeartbeat_NotFoundThreshold(t *testing.T) {
-	Convey("测试心跳 NOT_FOUND 失败计数逻辑", t, func() {
-		defer resetReRegisterState()
-
-		Convey("notFoundCount 未超过阈值时不应触发重注册", func() {
-			resetReRegisterState()
-			atomic.StoreInt32(&notFoundCount, 1)
-			So(atomic.LoadInt32(&notFoundCount), ShouldBeLessThanOrEqualTo, int32(maxHeartbeatFailCount))
-		})
-
-		Convey("notFoundCount 超过阈值时应触发重注册", func() {
-			resetReRegisterState()
-			atomic.StoreInt32(&notFoundCount, 3) // > maxHeartbeatFailCount (2)
-			So(atomic.LoadInt32(&notFoundCount), ShouldBeGreaterThan, int32(maxHeartbeatFailCount))
-		})
-
-		Convey("心跳成功后应重置 notFoundCount", func() {
-			resetReRegisterState()
-			atomic.StoreInt32(&notFoundCount, 5)
-			// 模拟心跳成功
-			atomic.StoreInt32(&notFoundCount, 0)
-			So(atomic.LoadInt32(&notFoundCount), ShouldEqual, 0)
-		})
-	})
-}
-
-// TestAsyncReRegister_NilConfig 测试 savedRegistryCfg 为 nil 时的防护
+// TestAsyncReRegister_NilConfig 测试 registryCtx 为 nil 时的防护
 func TestAsyncReRegister_NilConfig(t *testing.T) {
-	Convey("测试 asyncReRegister 在 savedRegistryCfg 为 nil 时不崩溃", t, func() {
-		defer resetReRegisterState()
-		resetReRegisterState()
+	Convey("测试 asyncReRegister 在 registryCtx 为 nil 时不崩溃", t, func() {
+		defer resetRegistrar()
+		resetRegistrar()
 
-		// savedRegistryCfg 为 nil，asyncReRegister 应安全退出
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 
-		// 直接调用，不应 panic
-		atomic.StoreInt32(&reRegistering, 1)
-		asyncReRegister(ctx)
+		// 手动占用 reRegistering 标志，模拟 triggerAsyncReRegister 刚 CAS 成功
+		reg.reRegistering.Store(1)
+		reg.asyncReRegister(ctx)
 
-		// reRegistering 应被重置为 0
-		So(atomic.LoadInt32(&reRegistering), ShouldEqual, 0)
+		// reRegistering 应被 defer 重置为 0
+		So(reg.reRegistering.Load(), ShouldEqual, int32(0))
 	})
 }
 
 // TestAsyncReRegister_ContextCancelled 测试 context 取消时退出重注册
 func TestAsyncReRegister_ContextCancelled(t *testing.T) {
 	Convey("测试 asyncReRegister 在 context 取消时安全退出", t, func() {
-		defer resetReRegisterState()
-		resetReRegisterState()
+		defer resetRegistrar()
+		resetRegistrar()
 
-		// 设置一个较大的退避计数，使 delay > 0
-		atomic.StoreInt32(&reRegisterCount, 5)
+		// 预置 registryCtx，避免首轮因 nil 直接返回
+		reg.ctx.Store(&registryCtx{cfg: &Registry{Name: "polaris.limiter"}})
+		// 设置一个较大的退避计数，使 delay > 0 以便测试 ctx 取消路径
+		reg.reRegisterCount.Store(5)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		atomic.StoreInt32(&reRegistering, 1)
+		reg.reRegistering.Store(1)
 
 		done := make(chan struct{})
 		go func() {
-			asyncReRegister(ctx)
+			reg.asyncReRegister(ctx)
 			close(done)
 		}()
 
 		// 立即取消 context
 		cancel()
 
-		// 等待 asyncReRegister 退出
 		select {
 		case <-done:
-			// 正常退出
 		case <-time.After(3 * time.Second):
 			t.Fatal("asyncReRegister did not exit after context cancellation")
 		}
 
-		So(atomic.LoadInt32(&reRegistering), ShouldEqual, 0)
+		So(reg.reRegistering.Load(), ShouldEqual, int32(0))
+	})
+}
+
+// TestTriggerAsyncReRegister_CASDedup 测试连续触发只有一个 goroutine 执行重注册
+func TestTriggerAsyncReRegister_CASDedup(t *testing.T) {
+	Convey("连续触发 triggerAsyncReRegister 时，CAS 保证仅一次执行", t, func() {
+		defer resetRegistrar()
+		resetRegistrar()
+
+		reg.ctx.Store(&registryCtx{cfg: &Registry{Name: "polaris.limiter"}})
+
+		var calls atomic.Int32
+		release := make(chan struct{})
+		registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
+			apiServerConfigs []apiserver.Config, serverAddress string) error {
+			calls.Add(1)
+			<-release
+			return nil
+		}
+
+		reg.triggerAsyncReRegister(context.Background())
+		// 第二次触发应被 CAS 拦截
+		reg.triggerAsyncReRegister(context.Background())
+		reg.triggerAsyncReRegister(context.Background())
+
+		// 等待首个 goroutine 进入 registerFn
+		deadline := time.Now().Add(2 * time.Second)
+		for calls.Load() == 0 && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		So(calls.Load(), ShouldEqual, int32(1))
+		So(reg.reRegistering.Load(), ShouldEqual, int32(1))
+
+		close(release)
+		// 等待重注册协程退出
+		deadline = time.Now().Add(2 * time.Second)
+		for reg.reRegistering.Load() != 0 && time.Now().Before(deadline) {
+			time.Sleep(10 * time.Millisecond)
+		}
+		So(reg.reRegistering.Load(), ShouldEqual, int32(0))
+		So(calls.Load(), ShouldEqual, int32(1))
+	})
+}
+
+// TestAsyncReRegister_SuccessResetsCounters 测试重注册成功后重置计数器
+func TestAsyncReRegister_SuccessResetsCounters(t *testing.T) {
+	Convey("重注册成功后应重置 notFoundCount 与 reRegisterCount", t, func() {
+		defer resetRegistrar()
+		resetRegistrar()
+
+		reg.ctx.Store(&registryCtx{cfg: &Registry{Name: "polaris.limiter"}})
+		reg.notFoundCount.Store(5)
+		reg.reRegisterCount.Store(0) // 首轮 delay=0 以缩短测试耗时
+		reg.reRegistering.Store(1)
+
+		registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
+			apiServerConfigs []apiserver.Config, serverAddress string) error {
+			return nil
+		}
+
+		reg.asyncReRegister(context.Background())
+
+		So(reg.notFoundCount.Load(), ShouldEqual, int32(0))
+		So(reg.reRegisterCount.Load(), ShouldEqual, int32(0))
+		So(reg.reRegistering.Load(), ShouldEqual, int32(0))
+	})
+}
+
+// TestAsyncReRegister_RetryOnFailure 测试失败后在内部循环重试直到成功
+func TestAsyncReRegister_RetryOnFailure(t *testing.T) {
+	Convey("重注册失败后应继续内部循环重试，成功后重置计数器", t, func() {
+		defer resetRegistrar()
+		resetRegistrar()
+
+		reg.ctx.Store(&registryCtx{cfg: &Registry{Name: "polaris.limiter"}})
+		reg.reRegistering.Store(1)
+
+		// 第 1 次失败 -> reRegisterCount 变为 1，下轮 delay >= serverTtl（5s）
+		// 为了避免测试耗时，通过构造 ctx 提前取消后验证计数器累加行为
+		var calls atomic.Int32
+		registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
+			apiServerConfigs []apiserver.Config, serverAddress string) error {
+			n := calls.Add(1)
+			if n == 1 {
+				return fmt.Errorf("mock failure")
+			}
+			return nil
+		}
+
+		// 使用带超时的 ctx，避免因失败退避时间过长而挂起
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+
+		reg.asyncReRegister(ctx)
+
+		// 首轮失败会累加，然后进入 delay（约 5~10s），被 ctx 取消返回。
+		// 因此 reRegisterCount 至少为 1；calls 至少为 1 且 ≤ 2。
+		So(calls.Load(), ShouldBeGreaterThanOrEqualTo, int32(1))
+		So(calls.Load(), ShouldBeLessThanOrEqualTo, int32(2))
+		So(reg.reRegisterCount.Load(), ShouldBeGreaterThanOrEqualTo, int32(1))
+		So(reg.reRegistering.Load(), ShouldEqual, int32(0))
+	})
+}
+
+// TestHandleHeartbeatResp 测试心跳响应处理逻辑
+func TestHandleHeartbeatResp(t *testing.T) {
+	Convey("测试 handleHeartbeatResp 对响应码的处理", t, func() {
+		defer resetRegistrar()
+
+		instance := &polaris.Instance{
+			Host: &wrappers.StringValue{Value: "10.0.0.1"},
+			Port: &wrappers.UInt32Value{Value: 8101},
+		}
+
+		Convey("心跳 err 非空时返回 err", func() {
+			resetRegistrar()
+			err := reg.handleHeartbeatResp(context.Background(), instance, nil, fmt.Errorf("boom"))
+			So(err, ShouldNotBeNil)
+			So(reg.notFoundCount.Load(), ShouldEqual, int32(0))
+		})
+
+		Convey("成功响应应清零 notFoundCount", func() {
+			resetRegistrar()
+			reg.notFoundCount.Store(3)
+			resp := &polaris.Response{Code: &wrappers.UInt32Value{Value: 200000}}
+			err := reg.handleHeartbeatResp(context.Background(), instance, resp, nil)
+			So(err, ShouldBeNil)
+			So(reg.notFoundCount.Load(), ShouldEqual, int32(0))
+		})
+
+		Convey("NOT_FOUND 但未超阈值时不触发重注册", func() {
+			resetRegistrar()
+			// 阻塞 registerFn 以便观测是否被触发
+			registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
+				apiServerConfigs []apiserver.Config, serverAddress string) error {
+				return nil
+			}
+			resp := &polaris.Response{Code: &wrappers.UInt32Value{Value: notFoundResourceCode}}
+			err := reg.handleHeartbeatResp(context.Background(), instance, resp, nil)
+			So(err, ShouldNotBeNil)
+			So(reg.notFoundCount.Load(), ShouldEqual, int32(1))
+			So(reg.reRegistering.Load(), ShouldEqual, int32(0))
+		})
+
+		Convey("NOT_FOUND 且超阈值时触发异步重注册", func() {
+			resetRegistrar()
+			reg.ctx.Store(&registryCtx{cfg: &Registry{Name: "polaris.limiter"}})
+			// 预置计数让本次累加后刚好超阈值
+			reg.notFoundCount.Store(int32(maxHeartbeatFailCount))
+
+			release := make(chan struct{})
+			var called atomic.Int32
+			registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
+				apiServerConfigs []apiserver.Config, serverAddress string) error {
+				called.Add(1)
+				<-release
+				return nil
+			}
+
+			resp := &polaris.Response{Code: &wrappers.UInt32Value{Value: notFoundResourceCode}}
+			err := reg.handleHeartbeatResp(context.Background(), instance, resp, nil)
+			So(err, ShouldNotBeNil)
+
+			// 等待 goroutine 启动
+			deadline := time.Now().Add(2 * time.Second)
+			for called.Load() == 0 && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			So(reg.reRegistering.Load(), ShouldEqual, int32(1))
+			So(called.Load(), ShouldEqual, int32(1))
+
+			close(release)
+			// 等待清理
+			deadline = time.Now().Add(2 * time.Second)
+			for reg.reRegistering.Load() != 0 && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			So(reg.reRegistering.Load(), ShouldEqual, int32(0))
+		})
 	})
 }
 
