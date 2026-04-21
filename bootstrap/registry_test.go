@@ -634,10 +634,7 @@ api-servers:
 // resetRegistrar 重置 registrar 单例及 registerFn 注入点，供测试隔离使用。
 func resetRegistrar() {
 	reg = &registrar{}
-	registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
-		apiServerConfigs []apiserver.Config, serverAddress string) error {
-		return r.doSelfRegister(cfg, servers, apiServerConfigs, serverAddress)
-	}
+	registerFn = func(r *registrar) error { return r.doSelfRegister() }
 }
 
 // TestCalcReRegisterDelay 测试退避延迟计算逻辑
@@ -746,8 +743,7 @@ func TestTriggerAsyncReRegister_CASDedup(t *testing.T) {
 
 		var calls atomic.Int32
 		release := make(chan struct{})
-		registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
-			apiServerConfigs []apiserver.Config, serverAddress string) error {
+		registerFn = func(r *registrar) error {
 			calls.Add(1)
 			<-release
 			return nil
@@ -788,10 +784,7 @@ func TestAsyncReRegister_SuccessResetsCounters(t *testing.T) {
 		reg.reRegisterCount.Store(0) // 首轮 delay=0 以缩短测试耗时
 		reg.reRegistering.Store(1)
 
-		registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
-			apiServerConfigs []apiserver.Config, serverAddress string) error {
-			return nil
-		}
+		registerFn = func(r *registrar) error { return nil }
 
 		reg.asyncReRegister(context.Background())
 
@@ -801,38 +794,31 @@ func TestAsyncReRegister_SuccessResetsCounters(t *testing.T) {
 	})
 }
 
-// TestAsyncReRegister_RetryOnFailure 测试失败后在内部循环重试直到成功
+// TestAsyncReRegister_RetryOnFailure 测试失败后累加计数、ctx 取消时从退避中退出
 func TestAsyncReRegister_RetryOnFailure(t *testing.T) {
-	Convey("重注册失败后应继续内部循环重试，成功后重置计数器", t, func() {
+	Convey("重注册首次失败应累加 reRegisterCount，ctx 取消后退出", t, func() {
 		defer resetRegistrar()
 		resetRegistrar()
 
 		reg.ctx.Store(&registryCtx{cfg: &Registry{Name: "polaris.limiter"}})
 		reg.reRegistering.Store(1)
 
-		// 第 1 次失败 -> reRegisterCount 变为 1，下轮 delay >= serverTtl（5s）
-		// 为了避免测试耗时，通过构造 ctx 提前取消后验证计数器累加行为
 		var calls atomic.Int32
-		registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
-			apiServerConfigs []apiserver.Config, serverAddress string) error {
-			n := calls.Add(1)
-			if n == 1 {
-				return fmt.Errorf("mock failure")
-			}
-			return nil
+		registerFn = func(r *registrar) error {
+			calls.Add(1)
+			return fmt.Errorf("mock failure")
 		}
 
-		// 使用带超时的 ctx，避免因失败退避时间过长而挂起
-		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		// ctx 提前取消：首轮 delay=0 会立即调用 registerFn 失败，
+		// 累加计数后进入下一轮 delay ≥ serverTtl，ctx 已取消，select 立刻返回。
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 		defer cancel()
 
 		reg.asyncReRegister(ctx)
 
-		// 首轮失败会累加，然后进入 delay（约 5~10s），被 ctx 取消返回。
-		// 因此 reRegisterCount 至少为 1；calls 至少为 1 且 ≤ 2。
-		So(calls.Load(), ShouldBeGreaterThanOrEqualTo, int32(1))
-		So(calls.Load(), ShouldBeLessThanOrEqualTo, int32(2))
-		So(reg.reRegisterCount.Load(), ShouldBeGreaterThanOrEqualTo, int32(1))
+		// 首轮 delay=0 直接进入 registerFn，失败；第二轮 delay 被 ctx 取消，不会再次进入。
+		So(calls.Load(), ShouldEqual, int32(1))
+		So(reg.reRegisterCount.Load(), ShouldEqual, int32(1))
 		So(reg.reRegistering.Load(), ShouldEqual, int32(0))
 	})
 }
@@ -865,11 +851,7 @@ func TestHandleHeartbeatResp(t *testing.T) {
 
 		Convey("NOT_FOUND 但未超阈值时不触发重注册", func() {
 			resetRegistrar()
-			// 阻塞 registerFn 以便观测是否被触发
-			registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
-				apiServerConfigs []apiserver.Config, serverAddress string) error {
-				return nil
-			}
+			registerFn = func(r *registrar) error { return nil }
 			resp := &polaris.Response{Code: &wrappers.UInt32Value{Value: notFoundResourceCode}}
 			err := reg.handleHeartbeatResp(context.Background(), instance, resp, nil)
 			So(err, ShouldNotBeNil)
@@ -885,8 +867,7 @@ func TestHandleHeartbeatResp(t *testing.T) {
 
 			release := make(chan struct{})
 			var called atomic.Int32
-			registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
-				apiServerConfigs []apiserver.Config, serverAddress string) error {
+			registerFn = func(r *registrar) error {
 				called.Add(1)
 				<-release
 				return nil

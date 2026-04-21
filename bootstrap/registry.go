@@ -83,12 +83,17 @@ type registrar struct {
 var reg = &registrar{}
 
 // registerFn 是 doSelfRegister 的注入点，便于单测替换。
-var registerFn = func(r *registrar, cfg *Registry, servers []apiserver.APIServer,
-	apiServerConfigs []apiserver.Config, serverAddress string) error {
-	return r.doSelfRegister(cfg, servers, apiServerConfigs, serverAddress)
+// 调用前 r.ctx 必须已由 selfRegister 写入。
+var registerFn = func(r *registrar) error {
+	return r.doSelfRegister()
 }
 
-// 初始化客户端SDK
+// nextReqID 基于服务名 + 单调递增计数生成请求跟踪 ID。
+func nextReqID(instance *polaris.Instance) string {
+	return fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
+}
+
+// initPolarisClient 初始化 Polaris 客户端地址与 token（启动期调用，后续只读）。
 func initPolarisClient(registryCfg *Registry) (err error) {
 	polarisServerAddress = registryCfg.PolarisServerAddress
 	polarisToken = registryCfg.Token
@@ -98,7 +103,6 @@ func initPolarisClient(registryCfg *Registry) (err error) {
 	return nil
 }
 
-// 启动心跳上报
 func startHeartbeat(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(serverTtl)
@@ -116,8 +120,7 @@ func startHeartbeat(ctx context.Context) {
 				_ = doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
 					for _, instance := range snapshot {
 						instance := instance
-						reqId := fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
-						clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
+						clientCtx, cancel := CreateHeaderContextWithReqId(timeout, nextReqID(instance))
 						resp, err := client.Heartbeat(clientCtx, instance)
 						cancel()
 						if err := reg.handleHeartbeatResp(ctx, instance, resp, err); err != nil {
@@ -194,13 +197,12 @@ func (r *registrar) asyncReRegister(ctx context.Context) {
 			}
 		}
 
-		saved := r.ctx.Load()
-		if saved == nil {
+		if r.ctx.Load() == nil {
 			log.Errorf("[Bootstrap] re-register failed: saved registry config is nil")
 			return
 		}
 
-		if err := registerFn(r, saved.cfg, saved.servers, saved.apiServerConfigs, saved.serverAddress); err != nil {
+		if err := registerFn(r); err != nil {
 			r.reRegisterCount.Add(1)
 			log.Errorf("[Bootstrap] re-register failed, err: %s", err.Error())
 			if ctx.Err() != nil {
@@ -254,7 +256,6 @@ func doWithPolarisClient(handle func(polaris.PolarisGRPCClient) error) error {
 	return handle(client)
 }
 
-// 创建服务注册请求
 func buildRegisterRequest(cfg *Registry, server apiserver.APIServer, serverCfg apiserver.Config, serverAddress string) *polaris.Instance {
 	instance := &polaris.Instance{}
 	instance.Namespace = &wrappers.StringValue{Value: cfg.Namespace}
@@ -294,7 +295,6 @@ func CreateHeaderContextWithReqId(timeout time.Duration, reqID string) (context.
 	return metadata.NewOutgoingContext(ctx, md), cancel
 }
 
-// 注册限流Server
 func selfRegister(cfg *Registry, servers []apiserver.APIServer, apiServerConfigs []apiserver.Config, serverAddress string) error {
 	reg.ctx.Store(&registryCtx{
 		cfg:              cfg,
@@ -302,22 +302,26 @@ func selfRegister(cfg *Registry, servers []apiserver.APIServer, apiServerConfigs
 		apiServerConfigs: apiServerConfigs,
 		serverAddress:    serverAddress,
 	})
-	return registerFn(reg, cfg, servers, apiServerConfigs, serverAddress)
+	return registerFn(reg)
 }
 
 // doSelfRegister 执行真正的注册操作，成功后把 heartbeat instance 列表写回 registrar。
-func (r *registrar) doSelfRegister(cfg *Registry, servers []apiserver.APIServer,
-	apiServerConfigs []apiserver.Config, serverAddress string) error {
-	// 构建 server name -> apiserver.Config 的映射
+// 调用前必须已将 registryCtx 写入 r.ctx。
+func (r *registrar) doSelfRegister() error {
+	saved := r.ctx.Load()
+	if saved == nil {
+		return fmt.Errorf("registry context not initialized")
+	}
+	cfg, servers, apiServerConfigs, serverAddress :=
+		saved.cfg, saved.servers, saved.apiServerConfigs, saved.serverAddress
+
 	serverCfgMap := make(map[string]apiserver.Config, len(apiServerConfigs))
 	for _, sc := range apiServerConfigs {
 		serverCfgMap[sc.Name] = sc
 	}
-	// 开始对每个监听端口的服务进行注册
 	instances := make([]*polaris.Instance, 0, len(servers))
 	for _, server := range servers {
 		serverCfg := serverCfgMap[server.GetProtocol()]
-		// 检查是否需要注册，不需要注册的 server 跳过
 		if !serverCfg.ShouldRegister() {
 			log.Infof("[Bootstrap] api server(%s) register is disabled, skip registration", server.GetProtocol())
 			continue
@@ -329,8 +333,7 @@ func (r *registrar) doSelfRegister(cfg *Registry, servers []apiserver.APIServer,
 	err := doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
 		for _, instance := range instances {
 			instance := instance
-			reqId := fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
-			clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
+			clientCtx, cancel := CreateHeaderContextWithReqId(timeout, nextReqID(instance))
 			resp, err := client.RegisterInstance(clientCtx, instance)
 			cancel()
 			if err != nil {
@@ -358,7 +361,6 @@ func (r *registrar) doSelfRegister(cfg *Registry, servers []apiserver.APIServer,
 	return nil
 }
 
-// 反注册
 func selfDeregister() error {
 	snapshot := reg.loadInstances()
 	if len(snapshot) == 0 {
@@ -367,8 +369,7 @@ func selfDeregister() error {
 	return doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
 		for _, instance := range snapshot {
 			instance := instance
-			reqId := fmt.Sprintf("%s_%d", instance.GetService().GetValue(), atomic.AddUint64(&rid, 1))
-			clientCtx, cancel := CreateHeaderContextWithReqId(timeout, reqId)
+			clientCtx, cancel := CreateHeaderContextWithReqId(timeout, nextReqID(instance))
 			resp, err := client.DeregisterInstance(clientCtx, instance)
 			cancel()
 			if err != nil {
