@@ -162,6 +162,8 @@ func (r *registrar) handleHeartbeatResp(ctx context.Context, instance *polaris.I
 }
 
 // triggerAsyncReRegister 触发异步重注册，使用 CAS 防止并发。
+// asyncReRegister 必须由本函数作为唯一入口调起，否则其 defer 中的
+// reRegistering.Store(0) 会与未配对的 CAS 造成状态错乱。
 func (r *registrar) triggerAsyncReRegister(ctx context.Context) {
 	if !r.reRegistering.CompareAndSwap(0, 1) {
 		log.Infof("[Bootstrap] re-register already in progress, skip")
@@ -172,6 +174,9 @@ func (r *registrar) triggerAsyncReRegister(ctx context.Context) {
 
 // asyncReRegister 异步执行重注册，内部循环重试。
 // 每轮按 reRegisterCount 计算退避延迟；成功后重置计数器。
+//
+// 注意：必须在 reRegistering == 1 的前提下调用（即由 triggerAsyncReRegister
+// 唯一入口触发，或测试中显式 Store(1) 后直接调用）；defer 中会 Store(0)。
 func (r *registrar) asyncReRegister(ctx context.Context) {
 	defer r.reRegistering.Store(0)
 
@@ -218,10 +223,19 @@ func calcReRegisterDelay(count int32) time.Duration {
 	if count <= 0 {
 		return 0
 	}
+	// 提前截断大指数：count=5 时 base 已经是 80s（> 60s 上限），
+	// 继续累加只会在 float64 → int64 转换时溢出。
+	const maxExp = 10
+	if count > maxExp {
+		return maxReRegisterDelay
+	}
 	base := float64(serverTtl) * math.Pow(2, float64(count-1))
 	jitter := float64(mrand.Int64N(int64(serverTtl)))
 	delay := time.Duration(base + jitter)
-	return min(delay, maxReRegisterDelay)
+	if delay < 0 || delay > maxReRegisterDelay {
+		return maxReRegisterDelay
+	}
+	return delay
 }
 
 func doWithPolarisClient(handle func(polaris.PolarisGRPCClient) error) error {

@@ -672,6 +672,15 @@ func TestCalcReRegisterDelay(t *testing.T) {
 		Convey("大 count 值时 delay 应不超过 maxReRegisterDelay", func() {
 			delay := calcReRegisterDelay(100)
 			So(delay, ShouldBeLessThanOrEqualTo, maxReRegisterDelay)
+			So(delay, ShouldBeGreaterThan, time.Duration(0))
+		})
+
+		Convey("math.MaxInt32 级 count 不应产生负数或溢出值", func() {
+			// 覆盖长期重试场景：避免 math.Pow 结果 +Inf -> int64 溢出为负数
+			for _, c := range []int32{11, 20, 100, 1000, 1 << 20, 1<<31 - 1} {
+				delay := calcReRegisterDelay(c)
+				So(delay, ShouldEqual, maxReRegisterDelay)
+			}
 		})
 	})
 }
