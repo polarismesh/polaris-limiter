@@ -1,0 +1,69 @@
+# polaris-limiter 集成测试专用配置
+#
+# 与仓库根目录 polaris-limiter.yaml 的差异：
+#   1. plugin.statis.name 切到 prometheus —— 让 /metrics 暴露 ratelimit_rq_* 等 7 个指标
+#      （file 插件下 /metrics 虽可达但输出为空）
+#   2. registry.polaris-server-address 用 ${POLARIS_SERVER} 占位，启动时由环境变量注入
+#      （test.sh 默认 127.0.0.1，可用 --polaris-server 指定远程地址）
+#   3. 日志路径改为 test/integration/.logs/ 下，避免污染仓库根目录
+#   4. registry.name 改为 polaris.limiter-local —— 用本地独立服务名，避免与集群中已存在的
+#      polaris.limiter 实例冲突（本地启动的 limiter 只服务于本次集成测试）
+#
+# 用法（test.sh 内部）：
+#   POLARIS_SERVER=127.0.0.1 ./polaris-limiter start -c test/integration/polaris-limiter-test.yaml
+
+registry:
+  enable: true
+  polaris-server-address: ${POLARIS_SERVER}:8091
+  name: polaris.limiter-local
+  namespace: Polaris
+  health-check-enable: true
+  host: 127.0.0.1       # 自定义注册 IP（不填则自动探测本地 IP）
+  token: ${POLARIS_TOKEN}  # polaris-server 开启鉴权时必填
+api-servers:
+  - name: http
+    option:
+      ip: 0.0.0.0
+      port: 8100
+  - name: grpc
+    option:
+      ip: 0.0.0.0
+      port: 8101
+      max-connections: 0
+limit:
+  myid: 1
+  counter-group: 64
+  max-counter: 1000000
+  max-client: 1000
+  push-worker: 4
+  slide-count: 1
+  purge-counter-interval: 30s
+  sync-remote-storage-interval: 1m
+  async-remote-wait-timeout: 200ms
+  update-remote-storage-threshold: 10m
+  flush-local-storage-threshold: 3s
+plugin:
+  # prometheus 插件：/metrics 暴露 ratelimit_rq_total/pass/limit 等 7 个指标
+  # 同时通过 file_log 配置启用 file 插件的分类日志（4 个日志文件）：
+  #   - polaris-limiter-ratelimit-report.log  限流上报日志
+  #   - polaris-limiter-event.log             事件日志
+  #   - polaris-limiter-stat.log              精度统计日志
+  #   - polaris-limiter-server-report.log     服务端上报日志
+  statis:
+    name: prometheus
+    option:
+      file_log:
+        ratelimit-app-name: 294_4423_polaris-limiter-stat
+        ratelimit_report_log_path: .logs/polaris-limiter-ratelimit-report.log
+        ratelimit_event_log_path: .logs/polaris-limiter-event.log
+        ratelimit_precision_log_path: .logs/polaris-limiter-stat.log
+        server-app-name: 294_11866_polaris_limit_server
+        server_report_log_path: .logs/polaris-limiter-server-report.log
+        log_interval: 60        # 与 prometheus flush 周期一致（60s 对齐分钟整点）
+        precision_log_interval: 1
+logger:
+  RotateOutputPath: .logs/polaris-limiter.log
+  RotationMaxSize: 100
+  RotationMaxAge: 7
+  RotationMaxBackups: 10
+  level: ${LOG_LEVEL}    # 日志级别，由 test.sh 通过 --log-level 注入（DEBUG/INFO）

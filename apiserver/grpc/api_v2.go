@@ -118,6 +118,9 @@ func (s *RateLimitServiceV2) Service(stream ratelimiter.RateLimitGRPCV2_ServiceS
 		apiCallStatValue.ReqCount = 1
 		s.statics.AddAPICall(apiCallStatValue)
 		plugin.PoolPutAPICallStatValueImpl(apiCallStatValue)
+		// 上报单次请求处理耗时（recv→send，同一 goroutine 同步测量，无竞争、无主动 push 干扰），
+		// 供 prometheus 统计 process_avg_us / process_max_us。负值由 AddProcessTime 内部丢弃。
+		s.statics.AddProcessTime(endTimeMicro - startTimeMicro)
 		if nil != err || code == apiv2.InvalidCounterKey {
 			return err
 		}

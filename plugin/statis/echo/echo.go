@@ -72,3 +72,8 @@ func (s *StaticsWorker) AddAPICall(value plugin.APICallStatValue) {
 func (s *StaticsWorker) AddEventToLog(value plugin.EventToLog) {
 
 }
+
+// AddProcessTime 上报单次处理耗时，echo 插件不消费此数据
+func (s *StaticsWorker) AddProcessTime(us int64) {
+	// no-op
+}

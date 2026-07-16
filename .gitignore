@@ -15,5 +15,17 @@ log/
 vendor/
 
 .codebuddy/
+CODEBUDDY.md
 .claude/
 CLAUDE.md
+
+# 测试覆盖率产物（make cover）
+cover.out
+cover.html
+
+# 集成测试运行产物（test/integration/test.sh 生成）
+test/integration/.build/
+test/integration/.logs/
+test/integration/.tmp/
+test/integration/consumer/polaris/
+test/integration/provider-qps/polaris/

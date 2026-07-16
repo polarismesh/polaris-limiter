@@ -23,7 +23,31 @@ import (
 
 var (
 	statisOnce = &sync.Once{}
+
+	// serverStatsProvider 由上层注入，用于 statis 插件在 flush 时查询活跃 stream / 计数器数量。
+	// 避免 plugin 包反向依赖 ratelimitv2 包。
+	serverStatsProvider     func() (activeStreams int, counterCount int)
+	serverStatsProviderLock sync.RWMutex
 )
+
+// SetServerStatsProvider 注入实例级状态查询函数（活跃 stream 数、活跃计数器数）。
+// 由 bootstrap 在 ratelimitv2.Initialize 完成后调用。允许传 nil 解除注入。
+func SetServerStatsProvider(p func() (activeStreams int, counterCount int)) {
+	serverStatsProviderLock.Lock()
+	defer serverStatsProviderLock.Unlock()
+	serverStatsProvider = p
+}
+
+// GetServerStats 查询当前 server 的活跃 stream / 计数器数量，未注入或注入函数返回错误时返回 (0, 0)。
+func GetServerStats() (activeStreams int, counterCount int) {
+	serverStatsProviderLock.RLock()
+	p := serverStatsProvider
+	serverStatsProviderLock.RUnlock()
+	if p == nil {
+		return 0, 0
+	}
+	return p()
+}
 
 // Statis 统计插件接口
 type Statis interface {
@@ -38,6 +62,8 @@ type Statis interface {
 	AddAPICall(value APICallStatValue)
 	// AddEventToLog 添加日志时间
 	AddEventToLog(value EventToLog)
+	// AddProcessTime 上报单次 gRPC 消息处理耗时（微秒），由 prometheus 等插件用于计算 avg/max
+	AddProcessTime(us int64)
 }
 
 // EventToLog 可输出的事件

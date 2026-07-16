@@ -22,7 +22,18 @@ import (
 	"net/http/pprof"
 
 	"github.com/emicklei/go-restful"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/polarismesh/polaris-limiter/pkg/log"
+	"github.com/polarismesh/polaris-limiter/plugin"
 )
+
+// metricsGatherer 由 statis 插件实现的可选接口：返回 prometheus.Gatherer 用于
+// 暴露 /metrics。未实现该接口的插件（echo / file）走默认全局 gatherer。
+type metricsGatherer interface {
+	Registry() *prometheus.Registry
+}
 
 // 初始化http handler
 func (h *Server) initHandler() {
@@ -33,11 +44,27 @@ func (h *Server) initHandler() {
 	h.handler.Handle("/debug/pprof/profile", http.HandlerFunc(pprof.Profile))
 	h.handler.Handle("/debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
 
+	h.handler.Handle("/metrics", buildMetricsHandler())
+
 	index := new(restful.WebService)
 	index.Route(index.GET("/").To(h.Index))
 	h.handler.Add(index)
 
 	h.initMaintainHandler()
+}
+
+// buildMetricsHandler 构造 /metrics 处理器：优先使用当前 statis 插件提供的
+// 独立 Registry；如果当前 statis 不提供（如 echo / file），降级为默认全局 gatherer。
+func buildMetricsHandler() http.Handler {
+	statis, err := plugin.GetStatis()
+	if err != nil {
+		log.Warnf("[HTTP] get statis plugin for /metrics failed: %s, fall back to default gatherer", err.Error())
+		return promhttp.Handler()
+	}
+	if mg, ok := statis.(metricsGatherer); ok && mg.Registry() != nil {
+		return promhttp.HandlerFor(mg.Registry(), promhttp.HandlerOpts{})
+	}
+	return promhttp.Handler()
 }
 
 // Index 默认的handler

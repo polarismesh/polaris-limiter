@@ -36,6 +36,10 @@ type RateLimitCurveReporter struct {
 	collectors *sync.Map
 	// droppedCollectors 被丢弃，没有来得及上报的
 	droppedCollectors *sync.Map
+	// sharedCollector 共享 collector 模式：只读不清零 CurveData（清零由外部调用方负责）
+	// 用于 prometheus 插件共享 collector 场景，避免两者互相吃掉增量
+	// PrecisionData 仍由本 reporter 清零（prometheus 不读 PrecisionData，无冲突）
+	sharedCollector bool
 }
 
 // NewRateLimitCurveReporter 创建曲线上报系统
@@ -72,11 +76,18 @@ func (s *RateLimitCurveReporter) processCollector(statValues map[interface{}]plu
 	collector plugin.RateLimitStatCollector, statValueSlice []plugin.RateLimitStatValue,
 	isCurve bool) []plugin.RateLimitStatValue {
 	var count int
-	statValueSlice, count = collector.DumpAndExpire(statValueSlice, isCurve)
+	// sharedCollector 模式下，collector 的值过期（删除）也交由外部调用方（prometheus flushOnce）负责；
+	// 否则 fileLogger 的 60s report 会先把未上报给 /metrics 的值 expire 掉，与 prometheus flush 竞争，
+	// 导致部分流量永远不进 /metrics（实测 GlobalRatelimitEchoServer 首批流量被 fileLogger 抢先 expire）。
+	// 非共享模式（独立 file 插件）行为不变：report 路径仍按 isCurve 过期。
+	statValueSlice, count = collector.DumpAndExpire(statValueSlice, isCurve && !s.sharedCollector)
 	if count == 0 {
 		return statValueSlice
 	}
 	var keyCounterOnly = !isCurve
+	// sharedCollector + isCurve 模式下，CurveData 的清零由外部调用方（prometheus flushOnce）负责，
+	// 这里只读不清零，避免互相吃掉增量。PrecisionData（isCurve=false）仍由本方法清零。
+	clearCurve := !s.sharedCollector || !isCurve
 	for i := 0; i < count; i++ {
 		statValue := statValueSlice[i]
 		statValueLimitData := fetchRateLimitData(statValue, isCurve)
@@ -89,8 +100,10 @@ func (s *RateLimitCurveReporter) processCollector(statValues map[interface{}]plu
 		if existsStatValue, ok := statValues[statKey]; ok {
 			passed := statValueLimitData.GetPassed()
 			limited := statValueLimitData.GetLimited()
-			statValueLimitData.AddPassed(0 - passed)
-			statValueLimitData.AddLimited(0 - limited)
+			if clearCurve {
+				statValueLimitData.AddPassed(0 - passed)
+				statValueLimitData.AddLimited(0 - limited)
+			}
 			existsRateLimitData := fetchRateLimitData(existsStatValue, isCurve)
 			existsRateLimitData.AddPassed(passed)
 			existsRateLimitData.AddLimited(limited)
@@ -100,8 +113,10 @@ func (s *RateLimitCurveReporter) processCollector(statValues map[interface{}]plu
 			existsRateLimitData := fetchRateLimitData(existsStatValue, isCurve)
 			passed := existsRateLimitData.GetPassed()
 			limited := existsRateLimitData.GetLimited()
-			statValueLimitData.AddPassed(0 - passed)
-			statValueLimitData.AddLimited(0 - limited)
+			if clearCurve {
+				statValueLimitData.AddPassed(0 - passed)
+				statValueLimitData.AddLimited(0 - limited)
+			}
 		}
 	}
 	return statValueSlice
@@ -134,8 +149,13 @@ func (s *RateLimitCurveReporter) MergeAllStatValues(isCurve bool) map[interface{
 	s.droppedCollectors.Range(func(key, value interface{}) bool {
 		collector := value.(plugin.RateLimitStatCollector)
 		statValuesSlice = s.processCollector(statValues, collector, statValuesSlice, isCurve)
-		if isCurve {
-			// 处理完就彻底删除
+		// 非共享模式：曲线路径（isCurve=true）读完曲线数据后彻底删除。
+		// 共享模式：曲线增量由外部（prometheus flushOnce）用其自身的 dropped 列表结算，
+		//   本 reporter 的曲线路径（BuildReportRecord）不会被调用，故改由每秒的 precision
+		//   路径（isCurve=false）读一次精度数据后删除，否则 dropped collector 永不清理导致
+		//   内存泄漏。删除本 map 的 entry 不影响 prometheus.dropped 中同一 collector 指针，
+		//   曲线增量仍能被后续 flushOnce 正确结算。
+		if isCurve || s.sharedCollector {
 			s.droppedCollectors.Delete(key)
 		}
 		return true
@@ -165,6 +185,51 @@ func (s *RateLimitCurveReporter) GetValueStr(value plugin.RateLimitStatValue) st
 	reportPassedValue := value.GetCurveData().GetPassed()
 	value.GetCurveData().AddPassed(0 - reportPassedValue)
 	return fmt.Sprintf(rateLimitValueStrPattern, reportLimitedValue, reportPassedValue)
+}
+
+// buildValueStr 按给定的 limited/passed 增量格式化上报值（供 delta 驱动路径复用，不触碰 CurveData）。
+func buildValueStr(limited, passed int64) string {
+	return fmt.Sprintf(rateLimitValueStrPattern, limited, passed)
+}
+
+// BuildRecordFromDeltas 用外部传入的曲线增量构建上报记录（共享 collector 模式）。
+//
+// 与 BuildReportRecord 的区别：数据来自 prometheus flushOnce 同一次 dump 的增量，
+// 而非本 reporter 读取 collector。按 statKey（含 client_ip，与本地曲线日志维度一致）聚合，
+// 保证同一 (counterKey, client_ip) 的多次增量合并为一行。
+func (s *RateLimitCurveReporter) BuildRecordFromDeltas(deltas []CurveDelta) *ReportRecord {
+	record := &ReportRecord{AppName: s.appName}
+	// 按 statKey 聚合同维度增量（含 client_ip），并保留一个样本用于取 tag。
+	type agg struct {
+		sample  plugin.RateLimitStatValue
+		passed  int64
+		limited int64
+	}
+	merged := make(map[interface{}]*agg, len(deltas))
+	order := make([]interface{}, 0, len(deltas))
+	for i := range deltas {
+		d := deltas[i]
+		if d.StatValue == nil || (d.Passed == 0 && d.Limited == 0) {
+			continue
+		}
+		key := d.StatValue.GetStatKey(false)
+		a, ok := merged[key]
+		if !ok {
+			a = &agg{sample: d.StatValue}
+			merged[key] = a
+			order = append(order, key)
+		}
+		a.passed += d.Passed
+		a.limited += d.Limited
+	}
+	for _, key := range order {
+		a := merged[key]
+		record.Tags = append(record.Tags, &ReportItem{
+			TagStr:   s.GetTagStr(a.sample),
+			ValueStr: buildValueStr(a.limited, a.passed),
+		})
+	}
+	return record
 }
 
 // CreateCollectorV2 创建采集器V2

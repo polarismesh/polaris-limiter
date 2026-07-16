@@ -22,4 +22,5 @@ import (
 	_ "github.com/polarismesh/polaris-limiter/apiserver/http"
 	_ "github.com/polarismesh/polaris-limiter/plugin/statis/echo"
 	_ "github.com/polarismesh/polaris-limiter/plugin/statis/file"
+	_ "github.com/polarismesh/polaris-limiter/plugin/statis/prometheus"
 )

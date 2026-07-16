@@ -105,6 +105,17 @@ func (g *Server) Run(errCh chan error) {
 		errCh <- err
 		return
 	}
+	// statis 是限流服务的必需依赖：api_v2.Service 与 ratelimitv2 全包均假定其非 nil。
+	// 当 plugin.statis 未配置或配置的插件名未注册时 GetStatis 会返回 nil 接口（err 为 nil），
+	// 若放行会在首个 stream 的 CreateRateLimitStatCollectorV2 处触发空指针 panic，
+	// 因此在启动阶段快速失败，将配置错误暴露在启动期而非运行期。
+	if statis == nil {
+		err = fmt.Errorf("statis plugin is not configured or its plugin name is not registered, " +
+			"check 'plugin.statis' in config")
+		log.Errorf("[GRPC] %s", err.Error())
+		errCh <- err
+		return
+	}
 	g.rateLimitServiceV2.statics = statis
 	ratelimitv2.SetStatics(statis)
 
