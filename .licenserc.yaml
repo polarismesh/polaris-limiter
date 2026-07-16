@@ -19,3 +19,4 @@ header:
     - "**/*.go"
   paths-ignore:
     - "**/*.pb.go"
+    - "test/**"  # 集成测试 demo 源自 polaris-go-examples，保留其原始 license header
