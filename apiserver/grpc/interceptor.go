@@ -50,6 +50,11 @@ func (g *Server) unaryInterceptor(ctx context.Context, req interface{},
 	tor := newInterceptor(ctx, g, info.FullMethod)
 	tor.preProcess()
 	rsp, err := handler(tor.ctx, req)
+	// unary 的 preProcess 与本调用在同一 goroutine 顺序执行，读 startTime 无竞争。
+	// stream 的处理耗时不走此路径，改由 Service 在 recv→send 之间同步测量后上报
+	// （见 api_v2.go），以避免服务端主动 push 的 SendMsg 读到无配对的 startTime
+	// （污染 process_max_us）并与 recv 写 startTime 形成数据竞争。
+	tor.reportProcessTime()
 	tor.postProcess(rsp)
 	return rsp, err
 }
@@ -92,8 +97,13 @@ func newInterceptor(ctx context.Context, server *Server, fullMethod string) *int
 
 // 拦截器前置处理
 func (i *interceptor) preProcess() {
+	// 记录起始时间，供 unary 拦截器的 reportProcessTime 计算处理耗时（prometheus 等插件消费）。
+	// 必须用 time.Now()：它携带单调时钟读数，reportProcessTime 的 time.Since 才能得到真实耗时；
+	// 若用 time.Unix(0, ...) 构造墙钟时间，NTP 跳变会污染 process_max_us（虚高）或丢样本（负值）。
+	// 注：stream 的 RecvMsg 也会调用本方法（用于 debug 日志），但 stream 的耗时统计不依赖
+	// startTime——由 Service 在 recv→send 之间同步测量后上报，避免主动 push 读到过期 startTime。
+	i.startTime = time.Now()
 	if log.DebugEnabled() {
-		i.startTime = time.Unix(0, utils.CurrentNanosecond())
 		log.Debug("receive request", utils.ZapRequestID(i.ctx), utils.ZapClientAddr(i.ctx),
 			utils.ZapUserAgent(i.ctx), utils.ZapMethod(i.fullMethod))
 	}
@@ -115,6 +125,25 @@ func GetV2ResponseCode(rsp interface{}) (uint32, bool) {
 		return apiv2.GetErrorCode(v2Resp), true
 	}
 	return 0, false
+}
+
+// reportProcessTime 上报单次处理耗时（微秒），仅供 unary 拦截器调用。
+// preProcess 与本方法在同一 goroutine 顺序执行，读 startTime 无数据竞争。
+// stream 场景严禁调用本方法：其 SendMsg 既服务于响应也服务于服务端主动 push，
+// push 无配对的 recv，会读到上一次请求残留的 startTime（污染指标），且与 recv 写
+// startTime 分处不同 goroutine（竞争）。stream 的耗时由 Service 同步测量后上报。
+func (i *interceptor) reportProcessTime() {
+	if i.startTime.IsZero() || i.server == nil || i.server.rateLimitServiceV2 == nil {
+		return
+	}
+	statis := i.server.rateLimitServiceV2.statics
+	if statis == nil {
+		return
+	}
+	elapsed := time.Since(i.startTime).Microseconds()
+	if elapsed >= 0 {
+		statis.AddProcessTime(elapsed)
+	}
 }
 
 // 拦截器后置处理

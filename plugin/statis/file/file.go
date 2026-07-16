@@ -161,3 +161,8 @@ func (s *StaticsWorker) DropRateLimitStatCollector(value plugin.RateLimitStatCol
 func (s *StaticsWorker) AddEventToLog(value plugin.EventToLog) {
 	s.eventLogReporter.AddEvent(value)
 }
+
+// AddProcessTime 上报单次处理耗时，file 插件不消费此数据
+func (s *StaticsWorker) AddProcessTime(us int64) {
+	// no-op
+}

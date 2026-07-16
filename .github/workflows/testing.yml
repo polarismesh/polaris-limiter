@@ -18,9 +18,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      # Checkout latest code
+      # Checkout latest code（fetch-depth=0 以支持 --new-from-rev 对比 origin/main）
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       # Setup the environment.
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -29,10 +31,14 @@ jobs:
           cache: false
 
       # Lint
+      # --new-from-rev=origin/main：只检查相对 main 的新增问题，不阻断于历史遗留 lint 债
+      # golangci-lint v2 需要 golangci-lint-action v7+，参考 polaris-go 升级到 v9
       - name: Run Linter
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.11.4
+          skip-cache: true
+          args: --timeout=10m --new-from-rev=origin/main
 
       # Compile
       - name: Build server

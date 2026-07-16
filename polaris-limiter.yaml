@@ -32,17 +32,45 @@ limit:
   update-remote-storage-threshold: 10m
   flush-local-storage-threshold: 3s
 plugin:
+  # 默认使用 prometheus statis 插件：在 HTTP /metrics 接口暴露 7 个 ratelimit_* 指标
+  #   ratelimit_rq_total / ratelimit_rq_pass / ratelimit_rq_limit /
+  #   ratelimit_process_avg_us / ratelimit_process_max_us /
+  #   ratelimit_active_streams / ratelimit_counter_count
+  # prometheus 插件每 60s（对齐分钟整点）flush 一次，把内存里的限流增量写入上述 Counter/Gauge。
+  #
+  # 同时通过 option.file_log 复用 file 插件的分类日志组件，写出 4 个分类日志文件：
+  #   - polaris-limiter-ratelimit-report.log  限流上报日志
+  #   - polaris-limiter-event.log             事件日志
+  #   - polaris-limiter-stat.log              精度统计日志（每秒）
+  #   - polaris-limiter-server-report.log     服务端上报日志
+  # prometheus 与 file_log 共享 collector：CurveData 的 dump 与清零统一由 prometheus flush 负责；
+  # 共享模式下 ratelimit-report 曲线日志改由 prometheus flush 用同一次 dump 的增量驱动写出，
+  # 与 /metrics 完全同源，不会因双 ticker 相位错位而少报（参见 plugin/statis/prometheus/statis.go flushOnce）。
+  # 其余 3 个分类日志（event / stat / server-report）数据源独立，仍按 file_log 自身周期写出。
   statis:
-    name: file
+    name: prometheus
     option:
-      ratelimit-app-name: 294_4423_polaris-limiter-stat #限流监控
-      ratelimit_report_log_path: log/polaris-limiter-ratelimit-report.log
-      ratelimit_event_log_path: log/polaris-limiter-event.log
-      ratelimit_precision_log_path: log/polaris-limiter-stat.log
-      server-app-name: 294_11866_polaris_limit_server #服务端监控
-      server_report_log_path: log/polaris-limiter-server-report.log
-      log_interval: 60
-      precision_log_interval: 1
+      file_log:
+        ratelimit-app-name: 294_4423_polaris-limiter-stat # 限流监控应用名
+        ratelimit_report_log_path: log/polaris-limiter-ratelimit-report.log
+        ratelimit_event_log_path: log/polaris-limiter-event.log
+        ratelimit_precision_log_path: log/polaris-limiter-stat.log
+        server-app-name: 294_11866_polaris_limit_server # 服务端监控应用名
+        server_report_log_path: log/polaris-limiter-server-report.log
+        log_interval: 60        # 分类日志 flush 周期（秒），与 prometheus flush 一致
+        precision_log_interval: 1
+  # 切换为纯 file 插件示例（不暴露 /metrics，仅写 4 个分类日志；与 prometheus 二选一）：
+  # statis:
+  #   name: file
+  #   option:
+  #     ratelimit-app-name: 294_4423_polaris-limiter-stat
+  #     ratelimit_report_log_path: log/polaris-limiter-ratelimit-report.log
+  #     ratelimit_event_log_path: log/polaris-limiter-event.log
+  #     ratelimit_precision_log_path: log/polaris-limiter-stat.log
+  #     server-app-name: 294_11866_polaris_limit_server
+  #     server_report_log_path: log/polaris-limiter-server-report.log
+  #     log_interval: 60
+  #     precision_log_interval: 1
 logger:
   RotateOutputPath: log/polaris-limiter.log
   RotationMaxSize: 500

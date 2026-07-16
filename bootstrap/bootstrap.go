@@ -24,6 +24,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/polarismesh/polaris-limiter/apiserver"
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
@@ -52,7 +54,11 @@ func Start(configPath string, restart bool) {
 // NonBlockingStart 非阻塞启动
 func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, chan error, context.CancelFunc) {
 	config := loadConfig(configPath)
-	fmt.Printf("load config: %+v\n", config)
+	configBytes, marshalErr := yaml.Marshal(config)
+	if marshalErr != nil {
+		log.Warnf("[Bootstrap] marshal config err: %s", marshalErr.Error())
+	}
+	fmt.Printf("load config:\n%s", string(configBytes))
 
 	if len(config.APIServers) == 0 {
 		bootExit("api servers is empty")
@@ -87,6 +93,21 @@ func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, c
 	if err := ratelimitv2.Initialize(ctx, &config.Limit); err != nil {
 		bootExit(fmt.Sprintf("ratelimitv2 core server initialize err: %s", err.Error()))
 	}
+	// 注入 server 状态查询函数，供 prometheus 等 statis 插件读取活跃 stream / counter 数量
+	plugin.SetServerStatsProvider(func() (int, int) {
+		srv, err := ratelimitv2.GetRateLimitServer()
+		if err != nil || srv == nil {
+			return 0, 0
+		}
+		var streams, counters int
+		if cm := srv.ClientMng(); cm != nil {
+			streams = cm.ClientCount()
+		}
+		if cm := srv.CounterMng(); cm != nil {
+			counters = cm.CounterCount()
+		}
+		return streams, counters
+	})
 	// 初始化智研上报
 	// observer.Initialize(ctx, &config.Limit)
 
