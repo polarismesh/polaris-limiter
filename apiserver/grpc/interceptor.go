@@ -35,9 +35,14 @@ import (
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 )
 
-// 不需要走拦截器的同步方法
+// 不需要走拦截器的同步方法。
+// key 必须与 proto 生成的 FullMethod 完全一致：proto package 是 polaris.metric.v2，
+// 与本模块名（polaris-limiter）无关。历史上此处误写为 polaris.limiter.v2，导致 TimeAdjust
+// 无法命中白名单，每次调用都走进 postProcess 打印 "response is invalid"（TimeAdjustResponse
+// 没有 code 字段，必然无法通过类型校验），并把耗时混入 process_avg_us / process_max_us。
+// 变更时由 TestUnaryMethodsNoInterceptor_KeysMatchRealMethods 兜底校验。
 var unaryMethodsNoInterceptor = map[string]bool{
-	"/polaris.limiter.v2.RateLimitGRPCV2/TimeAdjust": true,
+	"/polaris.metric.v2.RateLimitGRPCV2/TimeAdjust": true,
 }
 
 // grpc unary拦截器函数

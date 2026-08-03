@@ -19,11 +19,13 @@ package grpc
 
 import (
 	"context"
+	"strings"
 	"sync/atomic"
 	"testing"
 
 	"github.com/polarismesh/specification/source/go/api/v1/traffic_manage/ratelimiter"
 	. "github.com/smartystreets/goconvey/convey"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/polarismesh/polaris-limiter/plugin"
@@ -93,5 +95,110 @@ func TestInterceptor_ProcessTimeReporting(t *testing.T) {
 			So(func() { tor.reportProcessTime() }, ShouldNotPanic)
 			So(statis.processTimeCalls.Load(), ShouldEqual, int64(0))
 		})
+	})
+}
+
+// realUnaryMethods 从 proto 生成的文件描述符推导真实的 unary FullMethod 集合。
+// 不复用被测代码里的任何字符串常量，这样 proto package 或方法名变化时测试会独立失败。
+func realUnaryMethods() map[string]bool {
+	methods := make(map[string]bool)
+	services := ratelimiter.File_grpcapi_ratelimiter_proto.Services()
+	for i := 0; i < services.Len(); i++ {
+		svc := services.Get(i)
+		ms := svc.Methods()
+		for j := 0; j < ms.Len(); j++ {
+			m := ms.Get(j)
+			if m.IsStreamingClient() || m.IsStreamingServer() {
+				continue
+			}
+			methods["/"+string(svc.FullName())+"/"+string(m.Name())] = true
+		}
+	}
+	return methods
+}
+
+// TestUnaryMethodsNoInterceptor_KeysMatchRealMethods 防止免拦截白名单的 key 与 proto
+// 生成的 FullMethod 脱节。历史 bug：key 误写为 polaris.limiter.v2（跟随模块名），而
+// proto package 实为 polaris.metric.v2，导致 TimeAdjust 无法命中白名单。
+func TestUnaryMethodsNoInterceptor_KeysMatchRealMethods(t *testing.T) {
+	Convey("免拦截白名单与 proto 真实方法名保持一致", t, func() {
+		realMethods := realUnaryMethods()
+
+		Convey("白名单里每个 key 都是真实存在的 unary 方法", func() {
+			So(len(unaryMethodsNoInterceptor), ShouldBeGreaterThan, 0)
+			for key := range unaryMethodsNoInterceptor {
+				So(realMethods, ShouldContainKey, key)
+			}
+		})
+
+		Convey("TimeAdjust 必须在白名单中", func() {
+			var timeAdjust string
+			for key := range realMethods {
+				if strings.HasSuffix(key, "/TimeAdjust") {
+					timeAdjust = key
+				}
+			}
+			So(timeAdjust, ShouldNotBeEmpty)
+			So(unaryMethodsNoInterceptor[timeAdjust], ShouldBeTrue)
+		})
+	})
+}
+
+// TestUnaryInterceptor_TimeAdjustSkipsPostProcess 验证 TimeAdjust 走短路分支：
+// 既不打印 "response is invalid"（其响应无 code 字段，一旦进入 postProcess 必然报错），
+// 也不把时间对齐的耗时混入限流接口的 process 耗时指标。
+func TestUnaryInterceptor_TimeAdjustSkipsPostProcess(t *testing.T) {
+	Convey("TimeAdjust 不经过拦截器的后置处理", t, func() {
+		statis := &countingStatis{}
+		srv := &Server{rateLimitServiceV2: &RateLimitServiceV2{statics: statis}}
+
+		var timeAdjustMethod string
+		for key := range realUnaryMethods() {
+			if strings.HasSuffix(key, "/TimeAdjust") {
+				timeAdjustMethod = key
+			}
+		}
+		So(timeAdjustMethod, ShouldNotBeEmpty)
+
+		handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+			return &ratelimiter.TimeAdjustResponse{ServerTimestamp: 1}, nil
+		}
+
+		Convey("TimeAdjust 命中白名单，不上报处理耗时", func() {
+			info := &grpc.UnaryServerInfo{FullMethod: timeAdjustMethod}
+			rsp, err := srv.unaryInterceptor(context.Background(),
+				&ratelimiter.TimeAdjustRequest{}, info, handler)
+
+			So(err, ShouldBeNil)
+			So(rsp, ShouldHaveSameTypeAs, &ratelimiter.TimeAdjustResponse{})
+			So(statis.processTimeCalls.Load(), ShouldEqual, int64(0))
+		})
+
+		Convey("非白名单方法仍然走拦截器并上报耗时", func() {
+			info := &grpc.UnaryServerInfo{FullMethod: "/polaris.metric.v2.RateLimitGRPCV2/Other"}
+			_, err := srv.unaryInterceptor(context.Background(),
+				&ratelimiter.TimeAdjustRequest{}, info,
+				func(ctx context.Context, req interface{}) (interface{}, error) {
+					return &ratelimiter.RateLimitResponse{}, nil
+				})
+
+			So(err, ShouldBeNil)
+			So(statis.processTimeCalls.Load(), ShouldEqual, int64(1))
+		})
+	})
+}
+
+// TestTimeAdjustResponse_FailsPostProcessValidation 固化 bug 的成因：
+// TimeAdjustResponse 既不满足 validResponse（无 GetCode），也不是 RateLimitResponse，
+// 所以一旦它进入 postProcess 就必然打印 "response is invalid"。这解释了白名单为何必要。
+func TestTimeAdjustResponse_FailsPostProcessValidation(t *testing.T) {
+	Convey("TimeAdjustResponse 无法通过 postProcess 的响应校验", t, func() {
+		rsp := &ratelimiter.TimeAdjustResponse{ServerTimestamp: 1}
+
+		_, isValidResponse := interface{}(rsp).(validResponse)
+		So(isValidResponse, ShouldBeFalse)
+
+		_, matched := GetV2ResponseCode(rsp)
+		So(matched, ShouldBeFalse)
 	})
 }
