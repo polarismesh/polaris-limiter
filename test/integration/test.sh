@@ -241,6 +241,9 @@ run_monitor_sim_bg() {
     local out_dir="$1"
     mkdir -p "$out_dir"
     local stop_file="${out_dir}/stop" summary_file="${out_dir}/summary.log"
+    # 清理上一轮运行残留：stop 文件会让 while 首次即退出（采集 0 次），
+    # 旧 body_*/cycle_*.json 会混入本次结果，故启动前一并删干净。
+    rm -f "$stop_file" "${out_dir}"/body_* "${out_dir}"/cycle_*.json 2>/dev/null || true
     : > "$summary_file"
     local prev_json="" cycle=0
     log_info "[monitor-sim] 后台采集启动，对齐每分钟 :15 抓取 ${LIMITER_METRICS_ADDR}/metrics（贯穿全程，stop 文件=${stop_file}）"
