@@ -5,6 +5,13 @@ registry:
   namespace: Polaris
   health-check-enable: true
   # host: 127.0.0.1       # 自定义注册 IP（不填则自动探测本地 IP）
+  # 地域信息：注册到 Instance.Location，供 SDK 做跨地域就近路由。
+  # 生产环境通常只能拿到 zone，按需配 zone 即可；region/campus 留空不影响注册与限流。
+  # 三级全部留空则不下发 location，此时 Polaris 服务端会尝试按实例 IP 从 CMDB 推导地域
+  # （需服务端 cmdb 插件配了 url，否则推不出来）。
+  # region: huanan          # 地域，如 huanan（可选）
+  # zone: ap-guangzhou      # 可用区，如 ap-guangzhou
+  # campus: ap-guangzhou-1  # 园区，如 ap-guangzhou-1（可选）
 api-servers:
   - name: http
     # register-enabled: true    # 是否注册到注册中心（不填默认为 true，设为 false 则不注册）

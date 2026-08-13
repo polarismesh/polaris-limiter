@@ -23,6 +23,7 @@ import (
 	"math"
 	mrand "math/rand/v2"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -256,6 +257,33 @@ func doWithPolarisClient(handle func(polaris.PolarisGRPCClient) error) error {
 	return handle(client)
 }
 
+// buildLocation 构造实例地域信息，注册到 Instance.Location，供 SDK 做跨地域就近路由。
+// 地域信息须放在 Instance.Location 而非 metadata：就近路由只读 location 字段，
+// 服务端 metadata 与 location 是两套独立数据。
+//
+// 三级均未配置（trim 后为空）时返回 nil，Polaris 服务端会按实例 IP 走 CMDB 推导地域；
+// 配了任意一级时只下发非空层级，未配置的层级不构造 StringValue，保持注册报文干净。
+func buildLocation(cfg *Registry) *polaris.Location {
+	// 去除首尾空白，避免 yaml 引号值带空格导致地域匹配静默失效
+	region := strings.TrimSpace(cfg.Region)
+	zone := strings.TrimSpace(cfg.Zone)
+	campus := strings.TrimSpace(cfg.Campus)
+	if region == "" && zone == "" && campus == "" {
+		return nil
+	}
+	loc := &polaris.Location{}
+	if region != "" {
+		loc.Region = &wrappers.StringValue{Value: region}
+	}
+	if zone != "" {
+		loc.Zone = &wrappers.StringValue{Value: zone}
+	}
+	if campus != "" {
+		loc.Campus = &wrappers.StringValue{Value: campus}
+	}
+	return loc
+}
+
 func buildRegisterRequest(cfg *Registry, server apiserver.APIServer, serverCfg apiserver.Config, serverAddress string) *polaris.Instance {
 	instance := &polaris.Instance{}
 	instance.Namespace = &wrappers.StringValue{Value: cfg.Namespace}
@@ -271,6 +299,7 @@ func buildRegisterRequest(cfg *Registry, server apiserver.APIServer, serverCfg a
 	instance.Protocol = &wrappers.StringValue{Value: server.GetProtocol()}
 	instance.Version = &wrappers.StringValue{Value: version.Version}
 	instance.Metadata = map[string]string{"build-revision": version.GetRevision()}
+	instance.Location = buildLocation(cfg)
 	if cfg.HealthCheckEnable { // 开启健康检查
 		instance.EnableHealthCheck = &wrappers.BoolValue{Value: true}
 		instance.HealthCheck = &polaris.HealthCheck{

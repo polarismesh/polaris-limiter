@@ -216,6 +216,210 @@ func TestBuildRegisterRequest_HealthCheckDisabled(t *testing.T) {
 	})
 }
 
+// TestBuildRegisterRequest_Location 测试注册实例携带地域信息（region / zone / campus）
+func TestBuildRegisterRequest_Location(t *testing.T) {
+	Convey("测试 buildRegisterRequest 生成的地域信息", t, func() {
+		server := &mockAPIServer{protocol: "grpc", port: 8101}
+		serverCfg := apiserver.Config{Name: "grpc"}
+
+		Convey("未配置任何地域信息时 Location 应为 nil", func() {
+			cfg := &Registry{Name: "polaris.limiter", Namespace: "Polaris"}
+
+			instance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+
+			So(instance.GetLocation(), ShouldBeNil)
+		})
+
+		Convey("地域信息均为空字符串时 Location 应为 nil", func() {
+			cfg := &Registry{
+				Name:      "polaris.limiter",
+				Namespace: "Polaris",
+				Region:    "",
+				Zone:      "",
+				Campus:    "",
+			}
+
+			instance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+
+			So(instance.GetLocation(), ShouldBeNil)
+		})
+
+		Convey("配置完整三级地域时应全部下发", func() {
+			cfg := &Registry{
+				Name:      "polaris.limiter",
+				Namespace: "Polaris",
+				Region:    "huanan",
+				Zone:      "ap-guangzhou",
+				Campus:    "ap-guangzhou-1",
+			}
+
+			instance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+
+			So(instance.GetLocation(), ShouldNotBeNil)
+			So(instance.GetLocation().GetRegion().GetValue(), ShouldEqual, "huanan")
+			So(instance.GetLocation().GetZone().GetValue(), ShouldEqual, "ap-guangzhou")
+			So(instance.GetLocation().GetCampus().GetValue(), ShouldEqual, "ap-guangzhou-1")
+		})
+
+		Convey("只配置 zone 时其余层级应省略不下发（生产典型路径）", func() {
+			// 生产环境通常只能拿到 zone，limiter 侧如实上报，region/campus 留空。
+			cfg := &Registry{
+				Name:      "polaris.limiter",
+				Namespace: "Polaris",
+				Zone:      "ap-guangzhou",
+			}
+
+			instance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+
+			So(instance.GetLocation(), ShouldNotBeNil)
+			So(instance.GetLocation().GetZone().GetValue(), ShouldEqual, "ap-guangzhou")
+			// 未配置的层级不构造 StringValue（指针为 nil），保持注册报文干净；
+			// protobuf getter 对 nil 返回空串，服务端 GetValue() 同样得空。
+			So(instance.GetLocation().Region, ShouldBeNil)
+			So(instance.GetLocation().Campus, ShouldBeNil)
+		})
+
+		Convey("只配置 region 时应下发非空 Location，其余层级省略", func() {
+			cfg := &Registry{
+				Name:      "polaris.limiter",
+				Namespace: "Polaris",
+				Region:    "huanan",
+			}
+
+			instance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+
+			So(instance.GetLocation(), ShouldNotBeNil)
+			So(instance.GetLocation().GetRegion().GetValue(), ShouldEqual, "huanan")
+			So(instance.GetLocation().Zone, ShouldBeNil)
+			So(instance.GetLocation().Campus, ShouldBeNil)
+		})
+
+		Convey("只配置 campus 时应下发非空 Location，其余层级省略", func() {
+			cfg := &Registry{
+				Name:      "polaris.limiter",
+				Namespace: "Polaris",
+				Campus:    "ap-guangzhou-1",
+			}
+
+			instance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+
+			So(instance.GetLocation(), ShouldNotBeNil)
+			So(instance.GetLocation().GetCampus().GetValue(), ShouldEqual, "ap-guangzhou-1")
+			So(instance.GetLocation().Region, ShouldBeNil)
+			So(instance.GetLocation().Zone, ShouldBeNil)
+		})
+
+		Convey("配置值带首尾空白时应 trim 后下发", func() {
+			// yaml 引号值可能保留首尾空格，trim 避免地域匹配静默失效
+			cfg := &Registry{
+				Name:      "polaris.limiter",
+				Namespace: "Polaris",
+				Zone:      "  ap-guangzhou  ",
+			}
+
+			instance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+
+			So(instance.GetLocation().GetZone().GetValue(), ShouldEqual, "ap-guangzhou")
+		})
+
+		Convey("配置值仅空白时应视为未配置、Location 为 nil", func() {
+			cfg := &Registry{
+				Name:      "polaris.limiter",
+				Namespace: "Polaris",
+				Zone:      "   ",
+			}
+
+			instance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+
+			So(instance.GetLocation(), ShouldBeNil)
+		})
+
+		Convey("多个 api server 应各自下发完整且一致的的地域配置", func() {
+			cfg := &Registry{
+				Name:      "polaris.limiter",
+				Namespace: "Polaris",
+				Region:    "huanan",
+				Zone:      "ap-guangzhou",
+			}
+			httpServer := &mockAPIServer{protocol: "http", port: 8100}
+			httpCfg := apiserver.Config{Name: "http"}
+
+			httpInstance := buildRegisterRequest(cfg, httpServer, httpCfg, "10.0.0.1")
+			grpcInstance := buildRegisterRequest(cfg, server, serverCfg, "10.0.0.1")
+
+			So(httpInstance.GetLocation().GetRegion().GetValue(), ShouldEqual, "huanan")
+			So(httpInstance.GetLocation().GetZone().GetValue(), ShouldEqual, "ap-guangzhou")
+			So(httpInstance.GetLocation().GetCampus().GetValue(), ShouldEqual, "")
+			So(grpcInstance.GetLocation().GetRegion().GetValue(), ShouldEqual, "huanan")
+			So(grpcInstance.GetLocation().GetZone().GetValue(), ShouldEqual, "ap-guangzhou")
+			So(grpcInstance.GetLocation().GetCampus().GetValue(), ShouldEqual, "")
+			// 各实例应持有独立的 Location 对象，避免共享指针被互相改写
+			So(httpInstance.GetLocation(), ShouldNotEqual, grpcInstance.GetLocation())
+		})
+	})
+}
+
+// TestConfigYAML_Location 测试 YAML 配置解析地域信息
+func TestConfigYAML_Location(t *testing.T) {
+	Convey("测试 YAML 配置解析地域信息", t, func() {
+		Convey("完整地域配置应正确解析", func() {
+			yamlContent := `
+registry:
+  enable: true
+  polaris-server-address: 127.0.0.1:8091
+  name: polaris.limiter
+  namespace: Polaris
+  region: huanan
+  zone: ap-guangzhou
+  campus: ap-guangzhou-1
+`
+			var config Config
+			err := yaml.Unmarshal([]byte(yamlContent), &config)
+			So(err, ShouldBeNil)
+
+			So(config.Registry.Region, ShouldEqual, "huanan")
+			So(config.Registry.Zone, ShouldEqual, "ap-guangzhou")
+			So(config.Registry.Campus, ShouldEqual, "ap-guangzhou-1")
+		})
+
+		Convey("只配置 zone 时其余层级应为空", func() {
+			yamlContent := `
+registry:
+  enable: true
+  polaris-server-address: 127.0.0.1:8091
+  name: polaris.limiter
+  namespace: Polaris
+  zone: ap-guangzhou
+`
+			var config Config
+			err := yaml.Unmarshal([]byte(yamlContent), &config)
+			So(err, ShouldBeNil)
+
+			So(config.Registry.Zone, ShouldEqual, "ap-guangzhou")
+			So(config.Registry.Region, ShouldEqual, "")
+			So(config.Registry.Campus, ShouldEqual, "")
+		})
+
+		Convey("旧配置文件不含地域字段时应解析成功且为空值", func() {
+			yamlContent := `
+registry:
+  enable: true
+  polaris-server-address: 127.0.0.1:8091
+  name: polaris.limiter
+  namespace: Polaris
+  health-check-enable: true
+`
+			var config Config
+			err := yaml.Unmarshal([]byte(yamlContent), &config)
+			So(err, ShouldBeNil)
+
+			So(config.Registry.Region, ShouldEqual, "")
+			So(config.Registry.Zone, ShouldEqual, "")
+			So(config.Registry.Campus, ShouldEqual, "")
+		})
+	})
+}
+
 // TestConfigYAML_CustomHostAndPort 测试 YAML 配置文件能正确解析自定义 IP 和端口
 func TestConfigYAML_CustomHostAndPort(t *testing.T) {
 	Convey("测试 YAML 配置解析自定义注册 IP 和端口", t, func() {
