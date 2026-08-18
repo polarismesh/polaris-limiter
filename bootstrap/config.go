@@ -47,6 +47,12 @@ type Registry struct {
 	Host                 string `yaml:"host"`
 	Token                string `yaml:"token"`
 	HealthCheckEnable    bool   `yaml:"health-check-enable"`
+	// Region 实例所属地域（如 huanan），供 SDK 跨地域就近路由使用；为空则不下发该层级
+	Region string `yaml:"region"`
+	// Zone 实例所属可用区（如 ap-guangzhou），供 SDK 跨地域就近路由使用；为空则不下发该层级
+	Zone string `yaml:"zone"`
+	// Campus 实例所属园区（如 ap-guangzhou-1），供 SDK 跨地域就近路由使用；为空则不下发该层级
+	Campus string `yaml:"campus"`
 }
 
 // 解析配置文件
