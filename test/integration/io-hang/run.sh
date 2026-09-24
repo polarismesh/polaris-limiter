@@ -13,9 +13,10 @@ orig_args=("$@")
 parse_common_args "$@"
 if [[ "$SHOW_HELP" -eq 1 ]]; then
     cat <<EOF
-用法: $0 --namespace NS [--pod POD] [--skip-inject] [--wait-down 25] [--wait-up 40] [--wait-not-ready 15]
+用法: $0 --namespace NS [--pod POD] [--skip-inject] [--wait-down 25] [--wait-up 40] [--wait-not-ready 15] [--log-dir DIR]
 
 完整 IOHang 探针验收。默认会注入 FIFO，结束后自动 recover。
+日志与产物写入 DIR/<时间>-<pod>/ 并打包为同名 .zip，无 zip 命令时为 .tar.gz（默认 DIR=脚本同级 .logs/）。
 EOF
     exit 0
 fi
@@ -54,6 +55,7 @@ wait_readiness() {
 }
 
 resolve_pod
+init_run_log "$POD"
 log_step "IOHang E2E  $NAMESPACE/$POD"
 
 # 基线（独立进程，避免 port-forward 冲突）
@@ -64,6 +66,7 @@ if [[ "$SKIP_INJECT" == true ]]; then
 fi
 
 start_port_forward
+save_http_snapshot 1-baseline
 base_restarts="$(limiter_restart_count)"
 log_info "注入前 restartCount=${base_restarts}"
 
@@ -78,6 +81,7 @@ wait_readiness 503 DOWN "$WAIT_DOWN" || {
     "${SCRIPT_DIR}/recover.sh" --namespace "$NAMESPACE" --pod "$POD" --container "$CONTAINER" --probe-path "$PROBE_PATH" || true
     die "注入后 readiness 未转 DOWN"
 }
+save_http_snapshot 2-hang
 
 live_body="$(http_get_split /liveness)"
 live_code="$(printf '%s\n' "$live_body" | head -n 1)"
@@ -114,6 +118,7 @@ log_step "恢复"
 
 log_step "等待 /readiness 200 UP（最多 ${WAIT_UP}s）"
 wait_readiness 200 UP "$WAIT_UP" || die "恢复后 readiness 未回到 UP"
+save_http_snapshot 3-recovered
 
 cur_restarts="$(limiter_restart_count)"
 [[ "$cur_restarts" == "$base_restarts" ]] || die "恢复阶段 restartCount 变化: $base_restarts -> $cur_restarts"

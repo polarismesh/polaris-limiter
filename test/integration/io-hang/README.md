@@ -14,8 +14,37 @@ test/integration/io-hang/
 ├── inject-hang.sh      # 将探测文件换成 FIFO，卡住 OpenFile/Sync
 ├── recover.sh          # 解开 FIFO，恢复普通文件
 ├── watch.sh            # 轮询 readiness / READY / restartCount
-└── run.sh              # 串行：基线 → 注入 → 503/不重启 → 恢复 → 200
+├── run.sh              # 串行：基线 → 注入 → 503/不重启 → 恢复 → 200，日志落盘并打包
+├── pack-logs.sh        # 汇总打包所有运行日志，便于从测试机拷回
+└── build-materials.sh  # 本地生成上云物料 dist/io-hang.zip
 ```
+
+## 上云与日志回传
+
+在本地生成物料，上传到能 `kubectl` 访问集群的云端测试机：
+
+```bash
+./build-materials.sh            # 生成 dist/io-hang/ + dist/io-hang.zip（无 zip 命令时为 .tar.gz）
+./build-materials.sh --clean    # 清理 dist/
+```
+
+测试机上：
+
+```bash
+unzip io-hang.zip && cd io-hang
+./run.sh --namespace ins-87d1724e --pod polaris-limiter-0-0
+./pack-logs.sh                  # 生成 io-hang-logs-<时间戳>.zip，按提示 scp 回本地
+```
+
+`run.sh` 每次运行把日志写入 `.logs/<时间>-<pod>/`（可用 `--log-dir` / `LOG_DIR` 改目录），无论成功失败，结束时都会收集产物并打出同名 `.zip`，单次结果直接拷这个包即可：
+
+| 文件 | 内容 |
+|---|---|
+| `run.log` | 脚本完整输出（已去颜色码），末尾为 PASS / FAIL |
+| `1-baseline-*` / `2-hang-*` / `3-recovered-*` | 各阶段 `/readiness`、`/liveness` 响应（首行为 HTTP 码）与容器 ready/restart |
+| `pod.yaml` / `pod-describe.txt` / `events.txt` | Pod 状态、探针失败事件 |
+| `container-stdout.log`（`-previous.log`） | `kubectl logs`，含启动时打印的生效配置；发生重启时附上一个容器的输出 |
+| `polaris-limiter.log` / `polaris-limiter-probe.log` / `pod-log-dir.txt` | 容器内业务日志尾部 5000 行、探测文件尾部、日志目录列表（探测文件仍为 FIFO 时跳过读取） |
 
 ## 前置
 

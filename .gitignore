@@ -29,4 +29,7 @@ test/integration/.logs/
 test/integration/.tmp/
 test/integration/consumer/polaris/
 test/integration/provider-qps/polaris/
+test/integration/io-hang/.logs/
+test/integration/io-hang/dist/
+test/integration/io-hang/io-hang-logs-*
 /.cursor/
