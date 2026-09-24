@@ -48,6 +48,8 @@ func (h *Server) initHandler() {
 
 	index := new(restful.WebService)
 	index.Route(index.GET("/").To(h.Index))
+	index.Route(index.GET("/liveness").To(h.Liveness))
+	index.Route(index.GET("/readiness").To(h.Readiness))
 	h.handler.Add(index)
 
 	h.initMaintainHandler()
