@@ -79,6 +79,8 @@ func loadConfig(configPath string) *Config {
 	if err := yaml.NewDecoder(file).Decode(&config); err != nil {
 		bootExit(fmt.Sprintf("decode config err: %s", err.Error()))
 	}
+	// 在打印配置前补齐默认值，使 load config 输出即为实际生效值
+	config.Health.IOHang = config.Health.IOHang.WithDefaults()
 
 	return &config
 }

@@ -18,6 +18,8 @@
 package bootstrap
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -89,6 +91,19 @@ health:
 			So(got.RotationMaxSize, ShouldEqual, 2)
 			So(got.RotationMaxAge, ShouldEqual, 1)
 			So(got.RotationMaxBackups, ShouldEqual, 1)
+		})
+
+		Convey("loadConfig 补齐默认值，打印出的配置即实际生效值", func() {
+			path := filepath.Join(t.TempDir(), "polaris-limiter.yaml")
+			So(os.WriteFile(path, []byte("registry:\n  enable: true\n"), 0o644), ShouldBeNil)
+			out, err := yaml.Marshal(loadConfig(path))
+			So(err, ShouldBeNil)
+			printed := string(out)
+			So(printed, ShouldContainSubstring, "enable: true")
+			So(printed, ShouldContainSubstring, "interval: 5s")
+			So(printed, ShouldContainSubstring, "affect-heartbeat: true")
+			So(printed, ShouldContainSubstring, "path: log/polaris-limiter-probe.log")
+			So(printed, ShouldNotContainSubstring, "enable: null")
 		})
 
 		Convey("显式 enable true 且自定义滚动参数", func() {

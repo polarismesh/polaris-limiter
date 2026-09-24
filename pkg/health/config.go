@@ -57,6 +57,12 @@ type Config struct {
 // WithDefaults 返回填好缺省值的副本，不修改接收者。
 func (c Config) WithDefaults() Config {
 	out := c
+	if out.Enable == nil {
+		out.Enable = boolPtr(defaultEnable)
+	}
+	if out.AffectHeartbeat == nil {
+		out.AffectHeartbeat = boolPtr(defaultAffectHeartbeat)
+	}
 	if out.Interval <= 0 {
 		out.Interval = defaultInterval
 	}
@@ -84,6 +90,8 @@ func (c Config) WithDefaults() Config {
 	}
 	return out
 }
+
+func boolPtr(v bool) *bool { return &v }
 
 // Enabled 是否启用检测；未配置时默认 true。
 func (c Config) Enabled() bool {

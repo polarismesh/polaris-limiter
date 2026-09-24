@@ -24,8 +24,6 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 )
 
-func boolPtr(v bool) *bool { return &v }
-
 func TestConfigWithDefaults(t *testing.T) {
 	Convey("IOHang 配置缺省与覆盖", t, func() {
 		Convey("未配置 / 零值应填默认值，enable 与 affect-heartbeat 默认为 true", func() {
@@ -39,6 +37,14 @@ func TestConfigWithDefaults(t *testing.T) {
 			So(got.RotationMaxBackups, ShouldEqual, defaultRotationMaxBackups)
 			So(got.Enabled(), ShouldBeTrue)
 			So(got.HeartbeatAffected(), ShouldBeTrue)
+			So(got.Enable, ShouldNotBeNil)
+			So(got.AffectHeartbeat, ShouldNotBeNil)
+		})
+
+		Convey("显式 false 不被默认值覆盖", func() {
+			got := Config{Enable: boolPtr(false), AffectHeartbeat: boolPtr(false)}.WithDefaults()
+			So(got.Enabled(), ShouldBeFalse)
+			So(got.HeartbeatAffected(), ShouldBeFalse)
 		})
 
 		Convey("配置正常值时应保留", func() {
