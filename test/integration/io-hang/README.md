@@ -101,9 +101,10 @@ export NAMESPACE=ins-87d1724e
 |---|---|---|
 | 探测写卡住超过 `timeout`（inflight） | 503 DOWN | 跳过 |
 | 距上次探测完成超过 `staleness` | 503 DOWN | 跳过 |
-| 写入**立即返回错误**（磁盘满、只读、路径不可写） | 200 UP，`details.lastError` 带原因 | 照常 |
+| 写入立即返回**设备错误**（`EIO` / `ENXIO` / `ENODEV`） | 503 DOWN，reason 为 `device error: ...` | 跳过 |
+| 写入**立即返回其他错误**（磁盘满、只读、路径不可写） | 200 UP，`details.lastError` 带原因 | 照常 |
 
-写错误不是 IOHang：进程仍能正常服务限流，且全量副本同时磁盘满时若摘流会把服务整体摘空。首次出错和恢复时 limiter 会各打一条 `[Health]` 日志。
+NFS、virtio、部分云盘掉盘时常见快速返回 `EIO` 而非一直阻塞，属于单节点设备故障，换副本即可绕开，因此摘流；下一次探测成功即恢复 UP。磁盘满、只读、无权限这类环境错误往往全量副本同时出现，进程仍能正常服务限流，摘流反而会把服务整体摘空。首次出错和恢复时 limiter 会各打一条 `[Health]` 日志。
 
 若 helm 探针仍打 `/`（未切到 `/liveness`+`/readiness`），K8s `READY` 可能一直是 Ready，**脚本仍以 HTTP `/readiness` 为准**，并打印告警。探针切完后可看到 limiter 容器 `ready=false`（双容器时常为 `1/2`）。
 
@@ -176,7 +177,7 @@ kubectl exec -n ins-87d1724e polaris-limiter-0-0 -c polaris-limiter -- pkill pol
 FIFO 上仍有卡住的 `OpenFile`。`recover.sh` 会先 `cat` 一下 FIFO 唤醒写侧；若仍失败，再跑一次 `recover.sh`，或重启该容器（最后手段）。
 
 **用 `chmod` / 删目录模拟故障，readiness 仍是 200**  
-这类操作让写入立即报错，按设计不算 IOHang（见「判定语义」），看 `details.lastError` 即可。要验证摘流必须制造「阻塞」，用本目录的 FIFO 注入。
+这类操作返回的是 `EACCES` / `ENOENT` 等环境错误，按设计不判 DOWN（见「判定语义」），看 `details.lastError` 即可。要验证摘流必须制造「阻塞」（本目录的 FIFO 注入）或设备错误（如在独立节点用 `dmsetup` 的 `error` target 让读写返回 `EIO`）。
 
 **`port-forward` 失败**  
 改 `--local-port`；确认本机端口未被占用。

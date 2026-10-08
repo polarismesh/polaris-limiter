@@ -19,9 +19,12 @@ package health
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/polarismesh/polaris-limiter/pkg/log"
@@ -30,11 +33,32 @@ import (
 // firstResultPoll 是 WaitFirstResult 轮询 inflight 超时的间隔。
 const firstResultPoll = 20 * time.Millisecond
 
-// IOHangDetector 后台周期性执行一次同步落盘写，用「当前 inflight 时长」和
-// 「上次探测完成时间」两个维度判定 IOHang。
+// deviceErrnos 表示存储设备本身故障（NFS / virtio / 云盘掉盘常见为快速返回 EIO 而非阻塞）。
+// 与磁盘满、只读、无权限不同，这类故障局限在单个节点，换副本即可绕开，应当摘流。
+var deviceErrnos = []syscall.Errno{syscall.EIO, syscall.ENXIO, syscall.ENODEV}
+
+// isDeviceError 判断探测写入错误是否来自存储设备故障。
+// lumberjack 打开 / 滚动文件失败时以 %s 拼接原错误，错误链断开，需再按 errno 文本兜底。
+func isDeviceError(err error) bool {
+	for _, errno := range deviceErrnos {
+		if errors.Is(err, errno) || strings.Contains(err.Error(), errno.Error()) {
+			return true
+		}
+	}
+	return false
+}
+
+// probeError 是最近一次探测失败的记录；device 为 true 时判 DOWN。
+type probeError struct {
+	msg    string
+	device bool
+}
+
+// IOHangDetector 后台周期性执行一次同步落盘写，用「当前 inflight 时长」、
+// 「上次探测完成时间」与「设备错误」三个维度判定 IOHang。
 // 探测写本身可能永久阻塞，因此绝不能在判定路径上等待它完成。
-// 写入立即返回错误（磁盘满、只读、路径不可写）不是 IOHang，只记录在 details 中，
-// 否则全量副本同时磁盘满时会把限流服务整体摘空。
+// 写入立即返回的环境类错误（磁盘满、只读、路径不可写）不判 DOWN，只记录在 details 中，
+// 否则全量副本同时磁盘满时会把限流服务整体摘空；EIO 等设备错误判 DOWN，直到下一次探测成功。
 type IOHangDetector struct {
 	interval  time.Duration
 	timeout   time.Duration
@@ -46,7 +70,7 @@ type IOHangDetector struct {
 	lastDoneAt    atomic.Int64 // 上次探测完成（成功或失败）的 UnixNano
 	lastSuccessAt atomic.Int64 // 上次探测成功的 UnixNano
 	lastCostNs    atomic.Int64
-	lastErr       atomic.Pointer[string]
+	lastErr       atomic.Pointer[probeError] // nil 表示上次探测成功
 
 	firstDoneOnce sync.Once
 	firstDone     chan struct{} // 首次探测完成后关闭
@@ -119,6 +143,8 @@ func (d *IOHangDetector) kickProbe() {
 func (d *IOHangDetector) logTransition(hadErr bool, err error) {
 	cost := time.Duration(d.lastCostNs.Load())
 	switch {
+	case err != nil && !hadErr && isDeviceError(err):
+		log.Errorf("[Health] iohang probe hit device error, readiness DOWN: %v", err)
 	case err != nil && !hadErr:
 		log.Errorf("[Health] iohang probe write failed: %v", err)
 	case err == nil && hadErr:
@@ -141,8 +167,7 @@ func (d *IOHangDetector) ProbeOnce() error {
 	d.lastDoneAt.Store(done.UnixNano())
 	defer d.firstDoneOnce.Do(func() { close(d.firstDone) })
 	if err != nil {
-		msg := err.Error()
-		d.lastErr.Store(&msg)
+		d.lastErr.Store(&probeError{msg: err.Error(), device: isDeviceError(err)})
 		return err
 	}
 	d.lastErr.Store(nil)
@@ -160,8 +185,9 @@ func (d *IOHangDetector) Healthy() bool {
 func (d *IOHangDetector) Status() (up bool, details map[string]any) {
 	now := time.Now()
 	details = make(map[string]any, 4)
-	if errPtr := d.lastErr.Load(); errPtr != nil {
-		details["lastError"] = *errPtr
+	lastErr := d.lastErr.Load()
+	if lastErr != nil {
+		details["lastError"] = lastErr.msg
 	}
 
 	if inflight := d.inflightSince.Load(); inflight != 0 {
@@ -180,6 +206,10 @@ func (d *IOHangDetector) Status() (up bool, details map[string]any) {
 	if since := now.Sub(time.Unix(0, lastDone)); since > d.staleness {
 		details["reason"] = fmt.Sprintf("last probe done %s ago, exceeds staleness %s",
 			since.Round(time.Millisecond), d.staleness)
+		return false, details
+	}
+	if lastErr != nil && lastErr.device {
+		details["reason"] = "device error: " + lastErr.msg
 		return false, details
 	}
 	if last := d.lastSuccessAt.Load(); last != 0 {

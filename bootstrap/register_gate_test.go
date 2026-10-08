@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -82,6 +83,17 @@ func TestSelfRegisterWhenReady(t *testing.T) {
 
 			So(selfRegisterWhenReady(ctx, cfg, nil, nil, "10.0.0.1"), ShouldBeNil)
 			So(calls.Load(), ShouldEqual, 1)
+		})
+
+		Convey("首次探测 EIO（设备错误）：延迟注册", func() {
+			hcfg := health.Config{Enable: boolPtr(true)}.WithDefaults()
+			d := health.NewIOHangDetector(hcfg, errWriter{err: syscall.EIO})
+			_ = d.ProbeOnce()
+			health.SetDefault(health.NewChecker(hcfg, d))
+
+			So(selfRegisterWhenReady(ctx, cfg, nil, nil, "10.0.0.1"), ShouldBeNil)
+			time.Sleep(50 * time.Millisecond)
+			So(calls.Load(), ShouldEqual, 0)
 		})
 
 		Convey("启动时 IOHang：不注册、不报错，恢复后再注册", func() {

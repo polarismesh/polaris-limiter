@@ -19,6 +19,7 @@ package health
 
 import (
 	"context"
+	"syscall"
 	"testing"
 	"time"
 
@@ -66,6 +67,14 @@ func TestCheckerReports(t *testing.T) {
 				AffectHeartbeat: boolPtr(false),
 			}.WithDefaults(), downDetector())
 			So(c.AllowHeartbeat(), ShouldBeTrue)
+		})
+
+		Convey("写入 EIO 时 readiness DOWN 且跳过心跳", func() {
+			d := NewIOHangDetector(testDetectorCfg(), errSink{err: syscall.EIO})
+			_ = d.ProbeOnce()
+			c := NewChecker(Config{Enable: boolPtr(true)}.WithDefaults(), d)
+			So(c.Readiness().Status, ShouldEqual, StatusDown)
+			So(c.AllowHeartbeat(), ShouldBeFalse)
 		})
 
 		Convey("默认 affect-heartbeat 在 DOWN 时跳过心跳", func() {

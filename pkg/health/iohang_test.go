@@ -20,8 +20,11 @@ package health
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
@@ -129,6 +132,52 @@ func TestIOHangDetectorStatus(t *testing.T) {
 			So(hasErr, ShouldBeFalse)
 		})
 
+		Convey("写入立即返回 EIO 判 DOWN", func() {
+			d := NewIOHangDetector(testDetectorCfg(), errSink{err: syscall.EIO})
+			_ = d.ProbeOnce()
+			up, details := d.Status()
+			So(up, ShouldBeFalse)
+			So(details["reason"], ShouldContainSubstring, "device error")
+			So(details["lastError"], ShouldEqual, syscall.EIO.Error())
+		})
+
+		Convey("设备错误按错误链与 lumberjack 拼接文本两种形式识别", func() {
+			pathErr := &os.PathError{Op: "sync", Path: "log/polaris-limiter-probe.log", Err: syscall.EIO}
+			for _, err := range []error{
+				fmt.Errorf("sync probe file: %w", pathErr),
+				fmt.Errorf("can't open new logfile: %s", pathErr),
+				syscall.ENXIO,
+				syscall.ENODEV,
+			} {
+				d := NewIOHangDetector(testDetectorCfg(), errSink{err: err})
+				_ = d.ProbeOnce()
+				So(d.Healthy(), ShouldBeFalse)
+			}
+		})
+
+		Convey("磁盘满 / 只读 / 无权限仍为 UP", func() {
+			for _, errno := range []syscall.Errno{syscall.ENOSPC, syscall.EROFS, syscall.EACCES} {
+				d := NewIOHangDetector(testDetectorCfg(), errSink{err: &os.PathError{Op: "write", Path: "p", Err: errno}})
+				_ = d.ProbeOnce()
+				up, details := d.Status()
+				So(up, ShouldBeTrue)
+				So(details["lastError"], ShouldContainSubstring, errno.Error())
+			}
+		})
+
+		Convey("EIO 后再次探测成功恢复 UP", func() {
+			sink := &toggleSink{err: syscall.EIO}
+			d := NewIOHangDetector(testDetectorCfg(), sink)
+			_ = d.ProbeOnce()
+			So(d.Healthy(), ShouldBeFalse)
+			sink.err = nil
+			So(d.ProbeOnce(), ShouldBeNil)
+			up, details := d.Status()
+			So(up, ShouldBeTrue)
+			_, hasErr := details["lastError"]
+			So(hasErr, ShouldBeFalse)
+		})
+
 		Convey("inflight 未完成时不启第二轮探测", func() {
 			sink := newBlockingSink()
 			defer close(sink.release)
@@ -161,6 +210,15 @@ func TestIOHangDetectorWaitFirstResult(t *testing.T) {
 			d.Start(ctx)
 			d.WaitFirstResult(ctx)
 			So(d.Healthy(), ShouldBeTrue)
+		})
+
+		Convey("首次探测 EIO 立即返回 DOWN", func() {
+			d := NewIOHangDetector(testDetectorCfg(), errSink{err: syscall.EIO})
+			d.Start(ctx)
+			begin := time.Now()
+			d.WaitFirstResult(ctx)
+			So(d.Healthy(), ShouldBeFalse)
+			So(time.Since(begin), ShouldBeLessThan, d.timeout)
 		})
 
 		Convey("首次探测 hang 时在 timeout 附近返回 DOWN", func() {
