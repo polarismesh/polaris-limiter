@@ -27,6 +27,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/polarismesh/polaris-limiter/apiserver"
+	"github.com/polarismesh/polaris-limiter/pkg/health"
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/pkg/utils"
 	"github.com/polarismesh/polaris-limiter/plugin"
@@ -111,6 +112,9 @@ func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, c
 	// 初始化智研上报
 	// observer.Initialize(ctx, &config.Limit)
 
+	// IOHang 后台检测须在 HTTP server / 注册 / 心跳之前启动，注册门禁依赖首次探测结论
+	health.Start(ctx, config.Health.IOHang)
+
 	// 启动server
 	errCh := make(chan error, len(config.APIServers))
 	servers := startServers(config, errCh)
@@ -121,8 +125,8 @@ func NonBlockingStart(configPath string, restart bool) ([]apiserver.APIServer, c
 		if err = initPolarisClient(registryCfg); nil != err {
 			bootExit(fmt.Sprintf("fail to init polaris sdk, err: %s", err.Error()))
 		}
-		// 服务注册
-		if err := selfRegister(registryCfg, servers, config.APIServers, utils.ServerAddress); err != nil {
+		// 服务注册：启动期 IOHang 时延后到 readiness 恢复再注册
+		if err := selfRegisterWhenReady(ctx, registryCfg, servers, config.APIServers, utils.ServerAddress); err != nil {
 			bootExit(fmt.Sprintf("service registry err: %s", err.Error()))
 		}
 		if registryCfg.HealthCheckEnable { // 启动心跳上报

@@ -1,6 +1,6 @@
 # polaris-limiter 集成测试
 
-本目录用于对 **polaris-limiter 服务端** 做端到端验证：分布式限流行为 + `/metrics` 监控指标输出。包含两套测试场景——**本地单机**与**云端多节点分布式**——共用同一套基于 polaris-go 的 consumer / provider demo。
+本目录用于对 **polaris-limiter 服务端** 做端到端验证：分布式限流行为 + `/metrics` 监控指标输出 + **K8s IOHang 探针**。限流场景分本地单机与云端多节点，共用 polaris-go 的 consumer / provider demo；IOHang 验收见 `io-hang/`。
 
 ## 目录结构
 
@@ -13,6 +13,10 @@ test/integration/
 ├── local-standalone-test.md      # 本地单机 test.sh 详细说明
 ├── cloud-distributed-test.md     # 云端多节点分布式测试详细说明
 ├── metrics.md                    # polaris-limiter /metrics 指标说明
+├── io-hang/                      # K8s 集群 IOHang 探针验收
+│   ├── README.md                 # 集群验证步骤、FIFO 注入原理
+│   ├── run.sh                    # 基线 → 注入 hang → 503/不重启 → 恢复
+│   └── check-baseline.sh / inject-hang.sh / recover.sh / watch.sh
 ├── consumer/                     # 消费者 demo（独立 go.mod）
 │   ├── main.go                   # HTTP server：服务发现选实例 + 透传请求（含 429）
 │   ├── polaris.yaml              # SDK 配置（push 模式 prometheus 上报）
@@ -117,3 +121,4 @@ polaris-limiter 启用 prometheus 插件后，HTTP `/metrics` 暴露 7 个指标
 | [local-standalone-test.md](local-standalone-test.md) | 本地单机 `test.sh` 的目标、链路、10 步验证过程、配置说明与常见问题 |
 | [cloud-distributed-test.md](cloud-distributed-test.md) | 云端多节点拓扑、`provider.sh` / `consumer.sh` / 清理脚本用法、Case A/B/C 与人工核对步骤 |
 | [metrics.md](metrics.md) | polaris-limiter `/metrics` 的 7 个指标定义、label、数据流、flush 时序与输出示例 |
+| [io-hang/README.md](io-hang/README.md) | K8s 集群 IOHang 探针：基线检查、FIFO 注入 hang、摘流/不重启、恢复 |

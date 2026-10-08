@@ -1,0 +1,22 @@
+# StatefulSet serviceName 对应的 headless Service，提供稳定的 Pod DNS。
+# SDK 通过北极星 Polaris/polaris.limiter 寻址 limiter；如需集群外直连，另建 LoadBalancer Service。
+apiVersion: v1
+kind: Service
+metadata:
+  name: polaris-limiter
+  namespace: polaris-system
+  labels:
+    app: polaris-limiter
+spec:
+  clusterIP: None
+  selector:
+    app: polaris-limiter
+  ports:
+    - name: http
+      port: 8100
+      targetPort: 8100
+      protocol: TCP
+    - name: grpc
+      port: 8101
+      targetPort: 8101
+      protocol: TCP

@@ -83,3 +83,17 @@ logger:
   RotationMaxAge: 30
   RotationMaxBackups: 100
   level: info
+# 健康检查。整段不填时全部走默认值，存量配置无需修改。
+health:
+  iohang:
+    enable: true              # 是否启用 IOHang 检测，默认 true
+    interval: 5s              # 后台检测周期（定时写探测文件，不由 /readiness 触发）
+    timeout: 3s               # 单次写超时阈值，超过即判 DOWN
+    staleness: 15s            # 距上次探测完成超过此值判 DOWN；小于 2*interval+timeout 时自动抬高
+                              # 写入立即报错（磁盘满/只读）不判 DOWN，仅在 /readiness details.lastError 展示；
+                              # EIO/ENXIO/ENODEV 等设备错误判 DOWN，直到下一次探测成功
+    affect-heartbeat: true    # DOWN 时是否跳过北极星心跳上报，默认 true
+    path: log/polaris-limiter-probe.log  # 独立探测文件，与业务日志同目录
+    rotation-max-size: 10     # 探测文件滚动大小（MB），默认 10，远小于业务日志 500
+    rotation-max-age: 7       # 探测文件保留天数，默认 7
+    rotation-max-backups: 3   # 探测文件备份个数，默认 3

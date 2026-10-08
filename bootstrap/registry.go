@@ -34,6 +34,7 @@ import (
 
 	"github.com/polarismesh/polaris-limiter/apiserver"
 	polaris "github.com/polarismesh/polaris-limiter/pkg/api/polaris/v1"
+	"github.com/polarismesh/polaris-limiter/pkg/health"
 	"github.com/polarismesh/polaris-limiter/pkg/log"
 	"github.com/polarismesh/polaris-limiter/pkg/version"
 )
@@ -79,6 +80,7 @@ type registrar struct {
 	notFoundCount   atomic.Int32 // 心跳连续 NOT_FOUND 次数
 	reRegisterCount atomic.Int32 // 重注册重试计数（用于指数退避）
 	reRegistering   atomic.Int32 // 0/1 标志，是否正在执行重注册
+	skippedBeats    atomic.Int32 // 因 readiness DOWN 连续跳过的心跳轮数
 }
 
 var reg = &registrar{}
@@ -87,6 +89,22 @@ var reg = &registrar{}
 // 调用前 r.ctx 必须已由 selfRegister 写入。
 var registerFn = func(r *registrar) error {
 	return r.doSelfRegister()
+}
+
+// sendHeartbeatsFn 是单轮心跳上报的注入点，便于单测替换。
+var sendHeartbeatsFn = func(ctx context.Context, r *registrar, snapshot []*polaris.Instance) {
+	_ = doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
+		for _, instance := range snapshot {
+			instance := instance
+			clientCtx, cancel := CreateHeaderContextWithReqId(timeout, nextReqID(instance))
+			resp, err := client.Heartbeat(clientCtx, instance)
+			cancel()
+			if err := r.handleHeartbeatResp(ctx, instance, resp, err); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // nextReqID 基于服务名 + 单调递增计数生成请求跟踪 ID。
@@ -114,25 +132,27 @@ func startHeartbeat(ctx context.Context) {
 				log.Infof("[Bootstrap] heartbeat routine stopped")
 				return
 			case <-ticker.C:
-				snapshot := reg.loadInstances()
-				if len(snapshot) == 0 {
-					continue
-				}
-				_ = doWithPolarisClient(func(client polaris.PolarisGRPCClient) error {
-					for _, instance := range snapshot {
-						instance := instance
-						clientCtx, cancel := CreateHeaderContextWithReqId(timeout, nextReqID(instance))
-						resp, err := client.Heartbeat(clientCtx, instance)
-						cancel()
-						if err := reg.handleHeartbeatResp(ctx, instance, resp, err); err != nil {
-							return err
-						}
-					}
-					return nil
-				})
+				reg.heartbeatRound(ctx)
 			}
 		}
 	}()
+}
+
+// heartbeatRound 执行一轮心跳。readiness DOWN 时跳过上报，由北极星 TTL 置不健康；
+// 跳过路径不打日志，避免在 IOHang 时阻塞在日志盘上。
+func (r *registrar) heartbeatRound(ctx context.Context) {
+	if !health.AllowHeartbeat() {
+		r.skippedBeats.Add(1)
+		return
+	}
+	if skipped := r.skippedBeats.Swap(0); skipped > 0 {
+		log.Infof("[Bootstrap] heartbeat resumed after skipping %d rounds (readiness DOWN)", skipped)
+	}
+	snapshot := r.loadInstances()
+	if len(snapshot) == 0 {
+		return
+	}
+	sendHeartbeatsFn(ctx, r, snapshot)
 }
 
 // loadInstances 返回已注册实例的快照；nil 时返回空切片。
@@ -325,13 +345,52 @@ func CreateHeaderContextWithReqId(timeout time.Duration, reqID string) (context.
 }
 
 func selfRegister(cfg *Registry, servers []apiserver.APIServer, apiServerConfigs []apiserver.Config, serverAddress string) error {
+	storeRegistryCtx(cfg, servers, apiServerConfigs, serverAddress)
+	return registerFn(reg)
+}
+
+func storeRegistryCtx(cfg *Registry, servers []apiserver.APIServer, apiServerConfigs []apiserver.Config, serverAddress string) {
 	reg.ctx.Store(&registryCtx{
 		cfg:              cfg,
 		servers:          servers,
 		apiServerConfigs: apiServerConfigs,
 		serverAddress:    serverAddress,
 	})
-	return registerFn(reg)
+}
+
+// registerGatePoll 是启动期 IOHang 时等待 readiness 恢复的轮询间隔，单测可调小。
+var registerGatePoll = time.Second
+
+// selfRegisterWhenReady 是启动期注册门禁：先等首次 IOHang 探测出结论。
+// UP（含写入报错）时同步注册，失败由调用方退出进程；
+// DOWN 时不注册也不退出（重启修不好节点磁盘），转入后台等 readiness 恢复后再注册。
+// buffered write 在盘 hang 时仍可能成功落 page cache，启动日志写得出去不代表磁盘正常。
+func selfRegisterWhenReady(ctx context.Context, cfg *Registry, servers []apiserver.APIServer,
+	apiServerConfigs []apiserver.Config, serverAddress string) error {
+	health.WaitFirstResult(ctx)
+	if health.AllowHeartbeat() {
+		return selfRegister(cfg, servers, apiServerConfigs, serverAddress)
+	}
+	storeRegistryCtx(cfg, servers, apiServerConfigs, serverAddress)
+	go reg.registerWhenReady(ctx, registerGatePoll)
+	return nil
+}
+
+// registerWhenReady 等 readiness 恢复后复用重注册流程（含失败退避）完成首次注册。
+// 日志在 goroutine 内打印，IOHang 时即便阻塞也不影响 bootstrap 主流程。
+func (r *registrar) registerWhenReady(ctx context.Context, poll time.Duration) {
+	log.Warnf("[Bootstrap] readiness DOWN at startup (iohang), defer polaris registration")
+	ticker := time.NewTicker(poll)
+	defer ticker.Stop()
+	for !health.AllowHeartbeat() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+	log.Infof("[Bootstrap] readiness recovered, start deferred polaris registration")
+	r.triggerAsyncReRegister(ctx)
 }
 
 // doSelfRegister 执行真正的注册操作，成功后把 heartbeat instance 列表写回 registrar。
