@@ -354,7 +354,7 @@ func TestBuildRegisterRequest_Location(t *testing.T) {
 			So(grpcInstance.GetLocation().GetZone().GetValue(), ShouldEqual, "ap-guangzhou")
 			So(grpcInstance.GetLocation().GetCampus().GetValue(), ShouldEqual, "")
 			// 各实例应持有独立的 Location 对象，避免共享指针被互相改写
-			So(httpInstance.GetLocation(), ShouldNotEqual, grpcInstance.GetLocation())
+			So(httpInstance.GetLocation() == grpcInstance.GetLocation(), ShouldBeFalse)
 		})
 	})
 }
